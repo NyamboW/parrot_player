@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    app:startDestination="@id/music_Fragment">
+
+    <fragment
+        android:id="@+id/MenuAboutUs"
+        android:name="com.example.parrot.AboutUsFragment"
+        android:label="About Us"
+        tools:layout="@layout/fragment_about_us" />
+
+    <fragment
+        android:id="@+id/MenuSettings"
+        android:name="com.example.parrot.SettingsFragment"
+        android:label="Settings"
+        tools:layout="@layout/fragment_settings" />
+    <fragment
+        android:id="@+id/menuFavourite"
+        android:name="com.example.parrot.FavFragment"
+        android:label="Favourites"
+        tools:layout="@layout/fragment_fav" />
+
+    <fragment
+        android:id="@+id/music_Fragment"
+        android:name="com.example.parrot.Music_Fragment"
+        android:label="Music"
+        tools:layout="@layout/fragment_music_" />
+
+
+</navigation>
