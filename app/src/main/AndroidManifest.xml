@@ -9,9 +9,14 @@
 
     <!-- Android 13+ -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <!-- Voice feature -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+
+    <!-- Foreground Service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
 
     <application
         android:name=".ApplicationClass"
@@ -42,13 +47,10 @@
         <service
             android:name=".MusicService"
             android:exported="false"
-            android:enabled="true"/>
+            android:enabled="true"
+            android:foregroundServiceType="mediaPlayback"/>
 
-        <!-- receiver should NOT be exported for internal app use -->
-        <receiver
-            android:name=".NotificationReceiver"
-            android:exported="false"
-            android:enabled="true"/>
+
 
     </application>
 

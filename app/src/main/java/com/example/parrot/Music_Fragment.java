@@ -12,8 +12,13 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
+import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.media.MediaMetadataRetriever;
+import android.util.LruCache;
 
 import androidx.fragment.app.Fragment;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -25,12 +30,33 @@ import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
 
 import java.util.ArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class Music_Fragment extends Fragment {
 
     ListView listView;
     String[] items;
     ArrayList<String> songList = new ArrayList<>();
+    
+    private ExecutorService executorService;
+    private LruCache<String, Bitmap> memoryCache;
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        executorService = Executors.newFixedThreadPool(4);
+        
+        final int maxMemory = (int) (Runtime.getRuntime().maxMemory() / 1024);
+        final int cacheSize = maxMemory / 8;
+        
+        memoryCache = new LruCache<String, Bitmap>(cacheSize) {
+            @Override
+            protected int sizeOf(String key, Bitmap bitmap) {
+                return bitmap.getByteCount() / 1024;
+            }
+        };
+    }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -153,7 +179,44 @@ public class Music_Fragment extends Fragment {
 
                 View v = getLayoutInflater().inflate(R.layout.list_items, null);
                 TextView txt = v.findViewById(R.id.txtSong);
+                ImageView img = v.findViewById(R.id.songImg);
+                
                 txt.setText(items[i]);
+                
+                String path = songList.get(i);
+                img.setTag(path);
+                
+                Bitmap cachedBitmap = memoryCache.get(path);
+                if (cachedBitmap != null) {
+                    img.setImageBitmap(cachedBitmap);
+                } else {
+                    img.setImageResource(R.drawable.ic_music);
+                    executorService.execute(() -> {
+                        Bitmap bitmap = null;
+                        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+                        try {
+                            retriever.setDataSource(path);
+                            byte[] art = retriever.getEmbeddedPicture();
+                            retriever.release();
+                            if (art != null) {
+                                bitmap = BitmapFactory.decodeByteArray(art, 0, art.length);
+                            }
+                        } catch (Exception ignored) {}
+                        
+                        final Bitmap finalBitmap = bitmap;
+                        if (finalBitmap != null) {
+                            memoryCache.put(path, finalBitmap);
+                            if (getActivity() != null) {
+                                getActivity().runOnUiThread(() -> {
+                                    if (path.equals(img.getTag())) {
+                                        img.setImageBitmap(finalBitmap);
+                                    }
+                                });
+                            }
+                        }
+                    });
+                }
+                
                 return v;
             }
         });
