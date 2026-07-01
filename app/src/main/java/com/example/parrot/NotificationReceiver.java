@@ -3,37 +3,35 @@ package com.example.parrot;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.widget.Toast;
+
+import androidx.core.content.ContextCompat;
 
 public class NotificationReceiver extends BroadcastReceiver {
+
     public static final String ACTION_NEXT = "NEXT";
     public static final String ACTION_PREV = "PREVIOUS";
     public static final String ACTION_PLAY = "PLAY";
+
     @Override
     public void onReceive(Context context, Intent intent) {
-        Intent intent2 = new Intent(context,MusicService.class);
-        if (intent.getAction() != null)
-        {
-            switch (intent.getAction())
-            {
-                case ACTION_PLAY:
-                    Toast.makeText(context, "play", Toast.LENGTH_SHORT).show();
-                    intent2.putExtra("myActionName",intent.getAction());
-                    context.startService(intent2);
 
-                    break;
-                case ACTION_NEXT:
-                    Toast.makeText(context, "next", Toast.LENGTH_SHORT).show();
-                    intent2.putExtra("myActionName",intent.getAction());
-                    context.startService(intent2);
-                    break;
-                case ACTION_PREV:
-                    Toast.makeText(context, "previous", Toast.LENGTH_SHORT).show();
-                    intent2.putExtra("myActionName",intent.getAction());
-                    context.startService(intent2);
-                    break;
-            }
+        if (intent == null || intent.getAction() == null) {
+            return;
         }
 
+        String action = intent.getAction();
+
+        Intent serviceIntent = new Intent(context, MusicService.class);
+        serviceIntent.putExtra("myActionName", action);
+
+        switch (action) {
+
+            case ACTION_PLAY:
+            case ACTION_NEXT:
+            case ACTION_PREV:
+
+                ContextCompat.startForegroundService(context, serviceIntent);
+                break;
+        }
     }
 }

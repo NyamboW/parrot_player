@@ -1,251 +1,195 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-
     android:layout_height="match_parent"
-    tools:context=".PlayerActivity"
-    android:orientation="vertical"
-    android:background="#000000"
-    android:weightSum="10"
-    >
+    android:background="#0B0B0F"
+    tools:context=".PlayerActivity">
 
+    <!-- Top Bar -->
     <LinearLayout
-        android:id="@+id/mainlayout"
-        android:layout_width="match_parent"
+        android:id="@+id/topBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:gravity="center_vertical"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnback"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_back"
+            android:tint="#FFFFFF"/>
+
+        <TextView
+            android:id="@+id/txtSong"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="Loading song..."
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:singleLine="true"
+            android:ellipsize="marquee"
+            android:marqueeRepeatLimit="marquee_forever"
+            android:focusable="true"
+            android:focusableInTouchMode="true"/>
+
+        <ImageButton
+            android:id="@+id/btnEq"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_equalizer"
+            android:tint="#FFFFFF"/>
+    </LinearLayout>
+
+    <!-- Album Art -->
+    <ImageView
+        android:id="@+id/imgView"
+        android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_weight="6"
+        android:layout_margin="24dp"
+        android:scaleType="centerCrop"
+        android:src="@drawable/picon"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        app:layout_constraintBottom_toTopOf="@id/playerControls"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
 
-        android:gravity=""
-        android:orientation="vertical">
+    <!-- Player Controls -->
+    <LinearLayout
+        android:id="@+id/playerControls"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
-<RelativeLayout
-    android:layout_width="match_parent"
-    android:layout_height="50dp">
-
-
-    <Button
-        android:id="@+id/btnfav"
-        android:layout_width="30dp"
-        android:layout_height="28dp"
-        android:layout_marginLeft="150dp"
-        android:layout_marginTop="20dp"
-        android:layout_marginRight="30dp"
-
-        android:background="@drawable/ic_fav" />
-
-    <Button
-        android:id="@+id/btnMic"
-        android:layout_width="30dp"
-        android:layout_height="30dp"
-        android:layout_marginTop="20dp"
-        android:layout_marginRight="30dp"
-        android:layout_toRightOf="@+id/btnfav"
-        android:background="@drawable/ic_mic"/>
-
-    <Button
-        android:id="@+id/btnEq"
-        android:layout_width="30dp"
-        android:layout_height="30dp"
-        android:layout_marginTop="20dp"
-        android:layout_toRightOf="@+id/btnMic"
-        android:background="@drawable/ic_equalizer" />
-
-</RelativeLayout>
-
-        <RelativeLayout
+        <!-- SeekBar -->
+        <SeekBar
+            android:id="@+id/seekBar"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:thumbTint="#FFFFFF"
+            android:progressTint="#4CAF50"
+            android:progressBackgroundTint="#444"/>
 
-            <Button
-                android:id="@+id/btnback"
-                android:layout_width="30dp"
-                android:layout_height="31dp"
-                android:layout_marginLeft="15dp"
-                android:layout_marginTop="20dp"
-
-                android:background="@drawable/ic_back" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="6dp">
 
             <TextView
-                android:id="@+id/txtSong"
-                android:layout_width="match_parent"
+                android:id="@+id/txtSongStart"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-android:layout_toRightOf="@id/btnback"
-                android:layout_marginStart="20dp"
-                android:layout_marginTop="20dp"
-                android:layout_marginEnd="20dp"
-                android:layout_marginBottom="20dp"
-                android:ellipsize="marquee"
-                android:marqueeRepeatLimit="marquee_forever"
-                android:padding="8dp"
-                android:singleLine="true"
-                android:text="New Song is loading......"
+                android:text="0:00"
+                android:textColor="#BBBBBB"
+                android:textSize="12sp"/>
 
-                android:textAlignment="center"
-                android:textColor="#FFFFFF"
-                android:textSize="16dp"
-                android:textStyle="italic" />
-        </RelativeLayout>
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"/>
 
+            <TextView
+                android:id="@+id/txtSongEnd"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0:00"
+                android:textColor="#BBBBBB"
+                android:textSize="12sp"/>
+        </LinearLayout>
 
-        <ImageView
+        <!-- Main Controls -->
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:id="@+id/imgView"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:paddingTop="16dp">
 
-            android:layout_gravity="center"
-            android:layout_marginLeft="20dp"
-            android:layout_marginRight="20dp"
-            android:layout_marginTop="10dp"
-            android:layout_marginBottom="8dp"
-            android:background="@drawable/picon"
-            />
-
-            </LinearLayout>
-
-    <RelativeLayout
-
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="0.5"
-
-        android:gravity="right"
-        android:orientation="vertical">
-
-
-
-    </RelativeLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="3.5"
-        android:gravity="center"
-        android:orientation="vertical">
-
-
-
-        <RelativeLayout
-            android:layout_width="match_parent"
-
-            android:layout_height="60dp">
-
-            <Button
-                android:id="@+id/btnPlay"
+            <ImageButton
+                android:id="@+id/btnPrevious"
                 android:layout_width="50dp"
                 android:layout_height="50dp"
-                android:layout_centerHorizontal="true"
-                android:layout_marginTop="5dp"
-                android:background="@drawable/ic_pause"
-                android:drawableTint="#403E3E" />
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_previous"
+                app:tint="#FFFFFF"/>
 
-            <Button
+            <ImageButton
+                android:id="@+id/btnPlay"
+                android:layout_width="70dp"
+                android:layout_height="70dp"
+                android:layout_marginHorizontal="20dp"
+                android:background="@drawable/circle_button"
+                android:src="@drawable/ic_play"
+                app:tint="#FFFFFF"/>
+
+            <ImageButton
                 android:id="@+id/btnNext"
-                android:layout_width="40dp"
+                android:layout_width="50dp"
                 android:layout_height="50dp"
-                android:layout_marginStart="15dp"
-                android:layout_marginTop="15dp"
-                android:layout_marginEnd="15dp"
-                android:layout_marginBottom="15dp"
-                android:layout_toRightOf="@+id/btnPlay"
-                android:background="@drawable/ic_next"
-                android:backgroundTint="#B6B5B5" />
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_next"
+                app:tint="#FFFFFF"/>
+        </LinearLayout>
 
-            <Button
-                android:id="@+id/btnPrevious"
-                android:layout_width="40dp"
-                android:layout_height="50dp"
-                android:layout_marginStart="15dp"
-                android:layout_marginTop="15dp"
-                android:layout_marginEnd="15dp"
-                android:layout_marginBottom="15dp"
-                android:layout_toLeftOf="@+id/btnPlay"
-                android:background="@drawable/ic_previous" />
-
-            <Button
-                android:id="@+id/btnRepeat"
-                android:layout_width="35dp"
-                android:layout_height="50dp"
-                android:layout_marginTop="15dp"
-                android:layout_marginBottom="15dp"
-                android:layout_toRightOf="@+id/btnNext"
-                android:background="@drawable/ic_repeat" />
-
-            <Button
-                android:id="@+id/btnShuffle"
-                android:layout_width="35dp"
-                android:layout_height="50dp"
-                android:layout_marginTop="15dp"
-                android:layout_marginBottom="15dp"
-                android:layout_toLeftOf="@+id/btnPrevious"
-                android:background="@drawable/ic_shuffle"
-
-                app:iconTint="#FFFFFF" />
-
-
-
-        </RelativeLayout>
-
-        <RelativeLayout
+        <!-- Extra Controls -->
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_marginTop="15dp"
-            android:layout_height="60dp">
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:paddingTop="10dp">
 
-            <SeekBar
-                android:id="@+id/seekBar"
-                android:layout_width="300dp"
-                android:layout_height="24dp"
-                android:layout_alignParentBottom="true"
+            <ImageButton
+                android:id="@+id/btnShuffle"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_shuffle"
+                app:tint="#FFFFFF"/>
 
-                android:layout_centerInParent="true"
-                android:layout_marginStart="2dp"
-                android:layout_marginTop="20dp"
-                android:layout_marginEnd="2dp"
-                android:layout_marginBottom="20dp" />
+            <ImageButton
+                android:id="@+id/btnRepeat"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="20dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_repeat"
+                app:tint="#FFFFFF"/>
 
-            <RelativeLayout
-                android:layout_width="match_parent"
-                android:layout_height="20dp"
-                >
+            <ImageButton
+                android:id="@+id/btnMic"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="20dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_mic"
+                app:tint="#FFFFFF"/>
 
-
-                <TextView
-                    android:id="@+id/txtSongStart"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-
-                    android:layout_alignParentLeft="true"
-                    android:layout_centerInParent="true"
-                    android:layout_marginLeft="25dp"
-                    android:singleLine="true"
-                    android:text="0:20"
-                    android:textColor="@color/white"
-                    android:textSize="10dp" />
-
-                <TextView
-                    android:id="@+id/txtSongEnd"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-
-                    android:layout_alignParentRight="true"
-                    android:layout_centerInParent="true"
-                    android:layout_marginRight="25dp"
-                    android:singleLine="true"
-                    android:text="5:15"
-                    android:textColor="@color/white"
-                    android:textSize="10dp" />
-
-            </RelativeLayout>
-
-        </RelativeLayout>
-
-
+            <ImageButton
+                android:id="@+id/btnfav"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="20dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_fav"
+                app:tint="#FFFFFF"/>
+        </LinearLayout>
 
     </LinearLayout>
 
-
-
-
-
-</LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

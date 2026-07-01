@@ -4,25 +4,26 @@ import android.app.Service;
 import android.content.Intent;
 import android.os.Binder;
 import android.os.IBinder;
-import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 
 public class MusicService extends Service {
-    private IBinder mBinder = new myBinder();
+
     public static final String ACTION_NEXT = "NEXT";
     public static final String ACTION_PREV = "PREVIOUS";
     public static final String ACTION_PLAY = "PLAY";
-    ActionPlaying actionPlaying;
+
+    private final IBinder binder = new MyBinder();
+    private ActionPlaying callback;
+
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-        return mBinder;
+        return binder;
     }
 
-    public class myBinder extends Binder
-    {
-        MusicService getService(){
+    public class MyBinder extends Binder {
+        MusicService getService() {
             return MusicService.this;
         }
     }
@@ -30,36 +31,28 @@ public class MusicService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
 
-        String actionName = intent.getStringExtra("myActionName");
-        if (actionName != null){
+        if (intent == null) return START_STICKY;
 
-            switch (actionName)
-            {
-                case ACTION_PLAY:
-                    if (actionPlaying != null)
-                    {
-                        actionPlaying.playClicked();
-                    }
+        String action = intent.getStringExtra("myActionName");
 
-                    break;
-                case ACTION_NEXT:
-                    if (actionPlaying != null)
-                    {
-                        actionPlaying.nextClicked();
-                    }
-                    break;
-                case ACTION_PREV:
-                    if (actionPlaying != null)
-                    {
-                        actionPlaying.prevClicked();
-                    }
-                    break;
-            }
+        if (callback == null || action == null) return START_STICKY;
+
+        switch (action) {
+            case ACTION_PLAY:
+                callback.playClicked();
+                break;
+            case ACTION_NEXT:
+                callback.nextClicked();
+                break;
+            case ACTION_PREV:
+                callback.prevClicked();
+                break;
         }
+
         return START_STICKY;
     }
-    public void setCallBack(ActionPlaying actionPlaying)
-    {
-        this.actionPlaying = actionPlaying;
+
+    public void setCallBack(ActionPlaying callback) {
+        this.callback = callback;
     }
 }
