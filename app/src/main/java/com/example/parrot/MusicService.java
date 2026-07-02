@@ -10,16 +10,32 @@ import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Binder;
+import android.os.Bundle;
 import android.os.IBinder;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
+import android.media.audiofx.Equalizer;
+import android.media.audiofx.BassBoost;
+import android.media.audiofx.PresetReverb;
+import android.content.SharedPreferences;
+import android.content.Context;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
 import java.util.ArrayList;
 import java.util.Random;
+
+import android.appwidget.AppWidgetManager;
+import android.content.ComponentName;
+import android.widget.RemoteViews;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
+import android.graphics.Rect;
+import android.graphics.RectF;
 
 public class MusicService extends Service {
 
@@ -28,6 +44,8 @@ public class MusicService extends Service {
     public static final String ACTION_NEXT = "ACTION_NEXT";
     public static final String ACTION_PREV = "ACTION_PREV";
     public static final String ACTION_REQUEST_UPDATE = "ACTION_REQUEST_UPDATE";
+    public static final String ACTION_RELOAD_EQUALIZER = "ACTION_RELOAD_EQUALIZER";
+    public static final String ACTION_CLOSE = "ACTION_CLOSE";
     
     public static final String BROADCAST_UPDATE_UI = "com.example.parrot.UPDATE_UI";
 
@@ -38,6 +56,10 @@ public class MusicService extends Service {
     private int position = 0;
     private boolean isShuffle = false;
     private boolean isRepeat = false;
+    
+    private Equalizer mEqualizer;
+    private BassBoost mBassBoost;
+    private PresetReverb mPresetReverb;
 
     private MediaSessionCompat mediaSession;
 
@@ -75,6 +97,16 @@ public class MusicService extends Service {
                 if (mediaPlayer != null) {
                     mediaPlayer.seekTo((int) pos);
                     updateMediaSession();
+                }
+            }
+            
+            @Override
+            public void onCustomAction(String action, Bundle extras) {
+                if (ACTION_CLOSE.equals(action)) {
+                    safeRelease();
+                    stopForeground(true);
+                    stopSelf();
+                    sendBroadcast(new Intent("com.example.parrot.CLOSE_APP"));
                 }
             }
         });
@@ -119,6 +151,18 @@ public class MusicService extends Service {
                 case ACTION_REQUEST_UPDATE:
                     broadcastUIUpdate();
                     break;
+                case ACTION_RELOAD_EQUALIZER:
+                    loadEqualizerSettings();
+                    break;
+                case ACTION_CLOSE:
+                    safeRelease();
+                    stopForeground(true);
+                    stopSelf();
+                    
+                    // Exit the app completely
+                    Intent closeIntent = new Intent("com.example.parrot.CLOSE_APP");
+                    sendBroadcast(closeIntent);
+                    break;
             }
         }
         return START_NOT_STICKY;
@@ -134,6 +178,8 @@ public class MusicService extends Service {
         mediaPlayer = MediaPlayer.create(this, uri);
 
         if (mediaPlayer == null) return;
+
+        setupEqualizer();
 
         mediaPlayer.start();
         updateMediaSession();
@@ -209,6 +255,9 @@ public class MusicService extends Service {
         Intent nextIntent = new Intent(this, MusicService.class).setAction(ACTION_NEXT);
         PendingIntent nextPendingIntent = PendingIntent.getService(this, 0, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
+        Intent closeIntent = new Intent(this, MusicService.class).setAction(ACTION_CLOSE);
+        PendingIntent closePendingIntent = PendingIntent.getService(this, 0, closeIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
         Intent intent = new Intent(this, PlayerActivity.class);
         PendingIntent contentIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
@@ -222,6 +271,7 @@ public class MusicService extends Service {
                 .addAction(R.drawable.ic_previous, "Previous", prevPendingIntent)
                 .addAction(playPauseBtn, "Play", playPendingIntent)
                 .addAction(R.drawable.ic_next, "Next", nextPendingIntent)
+                .addAction(R.drawable.ic_close, "Close", closePendingIntent)
                 .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
                         .setMediaSession(mediaSession.getSessionToken())
                         .setShowActionsInCompactView(0, 1, 2))
@@ -244,6 +294,30 @@ public class MusicService extends Service {
         intent.putExtra("isPlaying", mediaPlayer.isPlaying());
         intent.putExtra("duration", mediaPlayer.getDuration());
         sendBroadcast(intent);
+        
+        AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(this);
+        ComponentName widgetComponent = new ComponentName(this, PlayerWidgetProvider.class);
+        int[] widgetIds = appWidgetManager.getAppWidgetIds(widgetComponent);
+        if (widgetIds != null && widgetIds.length > 0) {
+            RemoteViews views = PlayerWidgetProvider.getWidgetViews(this);
+            views.setTextViewText(R.id.widgetSongName, getFileName(mySongs.get(position)));
+            if (mediaPlayer.isPlaying()) {
+                views.setImageViewResource(R.id.widgetPlayPause, R.drawable.ic_pause);
+            } else {
+                views.setImageViewResource(R.id.widgetPlayPause, R.drawable.ic_play);
+            }
+            
+            // Set rounded album art
+            Bitmap albumArt = getAlbumArt(mySongs.get(position));
+            if (albumArt != null) {
+                // Scale bitmap for widget to avoid memory issues and apply rounding
+                Bitmap scaled = Bitmap.createScaledBitmap(albumArt, 100, 100, true);
+                Bitmap rounded = getRoundedCornerBitmap(scaled, 16);
+                views.setImageViewBitmap(R.id.widgetAlbumArt, rounded);
+            }
+            
+            appWidgetManager.updateAppWidget(widgetIds, views);
+        }
     }
     
     private void updateMediaSession() {
@@ -252,12 +326,19 @@ public class MusicService extends Service {
         long currentPosition = mediaPlayer.getCurrentPosition();
         int state = mediaPlayer.isPlaying() ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED;
         
+        PlaybackStateCompat.CustomAction closeAction = new PlaybackStateCompat.CustomAction.Builder(
+                ACTION_CLOSE,
+                "Close",
+                R.drawable.ic_close
+        ).build();
+        
         mediaSession.setPlaybackState(new PlaybackStateCompat.Builder()
                 .setActions(PlaybackStateCompat.ACTION_PLAY |
                             PlaybackStateCompat.ACTION_PAUSE |
                             PlaybackStateCompat.ACTION_SKIP_TO_NEXT |
                             PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS |
                             PlaybackStateCompat.ACTION_SEEK_TO)
+                .addCustomAction(closeAction)
                 .setState(state, currentPosition, 1.0f)
                 .build());
                 
@@ -285,6 +366,27 @@ public class MusicService extends Service {
             e.printStackTrace();
         }
         return BitmapFactory.decodeResource(getResources(), R.drawable.ic_music);
+    }
+    
+    private Bitmap getRoundedCornerBitmap(Bitmap bitmap, int pixels) {
+        Bitmap output = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(output);
+
+        final int color = 0xff424242;
+        final Paint paint = new Paint();
+        final Rect rect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
+        final RectF rectF = new RectF(rect);
+        final float roundPx = pixels;
+
+        paint.setAntiAlias(true);
+        canvas.drawARGB(0, 0, 0, 0);
+        paint.setColor(color);
+        canvas.drawRoundRect(rectF, roundPx, roundPx, paint);
+
+        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+        canvas.drawBitmap(bitmap, rect, rect, paint);
+
+        return output;
     }
 
     private String getFileName(String path) {
@@ -335,6 +437,56 @@ public class MusicService extends Service {
         safeRelease();
         if (mediaSession != null) {
             mediaSession.release();
+        }
+    }
+    
+    private void setupEqualizer() {
+        if (mediaPlayer == null) return;
+        int sessionId = mediaPlayer.getAudioSessionId();
+        
+        if (mEqualizer != null) mEqualizer.release();
+        if (mBassBoost != null) mBassBoost.release();
+        if (mPresetReverb != null) mPresetReverb.release();
+        
+        try {
+            mEqualizer = new Equalizer(0, sessionId);
+            mBassBoost = new BassBoost(0, sessionId);
+            mPresetReverb = new PresetReverb(0, sessionId);
+            loadEqualizerSettings();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
+    private void loadEqualizerSettings() {
+        if (mEqualizer == null || mBassBoost == null || mPresetReverb == null) return;
+        SharedPreferences prefs = getSharedPreferences("parrot_eq", Context.MODE_PRIVATE);
+        boolean isEqEnabled = prefs.getBoolean("isEqualizerEnabled", true);
+        
+        try {
+            mEqualizer.setEnabled(isEqEnabled);
+            mBassBoost.setEnabled(isEqEnabled);
+            mPresetReverb.setEnabled(isEqEnabled);
+            
+            if (isEqEnabled) {
+                int bassStrength = prefs.getInt("bassStrength", -1);
+                if (bassStrength != -1 && mBassBoost.getStrengthSupported()) {
+                    mBassBoost.setStrength((short) bassStrength);
+                }
+                
+                int reverbPreset = prefs.getInt("reverbPreset", -1);
+                if (reverbPreset != -1) {
+                    mPresetReverb.setPreset((short) reverbPreset);
+                }
+                
+                short numBands = mEqualizer.getNumberOfBands();
+                for (short i = 0; i < numBands; i++) {
+                    int level = prefs.getInt("band" + i, mEqualizer.getBandLevel(i));
+                    mEqualizer.setBandLevel(i, (short) level);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }

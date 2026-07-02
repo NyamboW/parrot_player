@@ -77,27 +77,31 @@ public class PlayerActivity extends AppCompatActivity {
     private final BroadcastReceiver updateReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent.getAction() != null && intent.getAction().equals(MusicService.BROADCAST_UPDATE_UI)) {
-                String songName = intent.getStringExtra("song");
-                String songPath = intent.getStringExtra("songPath");
-                boolean isPlaying = intent.getBooleanExtra("isPlaying", false);
-                int duration = intent.getIntExtra("duration", 0);
+            if (intent.getAction() != null) {
+                if (intent.getAction().equals(MusicService.BROADCAST_UPDATE_UI)) {
+                    String songName = intent.getStringExtra("song");
+                    String songPath = intent.getStringExtra("songPath");
+                    boolean isPlaying = intent.getBooleanExtra("isPlaying", false);
+                    int duration = intent.getIntExtra("duration", 0);
 
-                txtSong.setText(songName);
-                btnPlay.setImageResource(isPlaying ? R.drawable.ic_pause : R.drawable.ic_play);
+                    txtSong.setText(songName);
+                    btnPlay.setImageResource(isPlaying ? R.drawable.ic_pause : R.drawable.ic_play);
 
-                seekBar.setMax(duration);
-                txtEnd.setText(formatTime(duration));
-                
-                if (songPath != null && !songPath.equals(imgView.getTag())) {
-                    imgView.setTag(songPath);
-                    loadAlbumArt(songPath);
-                }
-                
-                // Update favourite icon
-                if (songPath != null) {
-                    currentSongPath = songPath;
-                    updateFavIcon();
+                    seekBar.setMax(duration);
+                    txtEnd.setText(formatTime(duration));
+                    
+                    if (songPath != null && !songPath.equals(imgView.getTag())) {
+                        imgView.setTag(songPath);
+                        loadAlbumArt(songPath);
+                    }
+                    
+                    // Update favourite icon
+                    if (songPath != null) {
+                        currentSongPath = songPath;
+                        updateFavIcon();
+                    }
+                } else if (intent.getAction().equals("com.example.parrot.CLOSE_APP")) {
+                    finishAffinity();
                 }
             }
         }
@@ -130,6 +134,17 @@ public class PlayerActivity extends AppCompatActivity {
         position = getIntent().getIntExtra("pos", 0);
 
         if (mySongs != null && !mySongs.isEmpty()) {
+            if (position >= 0 && position < mySongs.size()) {
+                String initialSongPath = mySongs.get(position);
+                imgView.setTag(initialSongPath);
+                loadAlbumArt(initialSongPath);
+                
+                java.io.File file = new java.io.File(initialSongPath);
+                txtSong.setText(file.getName().replace(".mp3", ""));
+                currentSongPath = initialSongPath;
+                updateFavIcon();
+            }
+
             Intent serviceIntent = new Intent(this, MusicService.class);
             serviceIntent.setAction(MusicService.ACTION_START);
             serviceIntent.putStringArrayListExtra("songs", mySongs);
@@ -191,13 +206,20 @@ public class PlayerActivity extends AppCompatActivity {
                 if (sessionId != 0) {
                     DialogEqualizerFragment fragment = DialogEqualizerFragment.newBuilder()
                             .setAudioSessionId(sessionId)
-                            .themeColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
-                            .textColor(ContextCompat.getColor(this, android.R.color.white))
-                            .accentAlpha(ContextCompat.getColor(this, android.R.color.holo_green_light))
-                            .darkColor(ContextCompat.getColor(this, android.R.color.black))
-                            .setAccentColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
+                            .themeColor(android.graphics.Color.parseColor("#0B0B0F"))
+                            .textColor(android.graphics.Color.WHITE)
+                            .accentAlpha(android.graphics.Color.parseColor("#444CAF50"))
+                            .darkColor(android.graphics.Color.parseColor("#0B0B0F"))
+                            .setAccentColor(android.graphics.Color.parseColor("#4CAF50"))
                             .build();
                     fragment.show(getSupportFragmentManager(), "eq");
+                    
+                    getSupportFragmentManager().executePendingTransactions();
+                    if (fragment.getDialog() != null) {
+                        fragment.getDialog().setOnDismissListener(dialog -> {
+                            saveAndReloadEqualizer();
+                        });
+                    }
                 } else {
                     Toast.makeText(this, "Play a song first", Toast.LENGTH_SHORT).show();
                 }
@@ -205,6 +227,25 @@ public class PlayerActivity extends AppCompatActivity {
                 Toast.makeText(this, "Play a song first", Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    private void saveAndReloadEqualizer() {
+        android.content.SharedPreferences prefs = getSharedPreferences("parrot_eq", Context.MODE_PRIVATE);
+        android.content.SharedPreferences.Editor editor = prefs.edit();
+        
+        editor.putBoolean("isEqualizerEnabled", com.bullhead.equalizer.Settings.isEqualizerEnabled);
+        editor.putInt("presetPos", com.bullhead.equalizer.Settings.presetPos);
+        editor.putInt("reverbPreset", com.bullhead.equalizer.Settings.reverbPreset);
+        editor.putInt("bassStrength", com.bullhead.equalizer.Settings.bassStrength);
+        
+        if (com.bullhead.equalizer.Settings.seekbarpos != null) {
+            for (int i = 0; i < com.bullhead.equalizer.Settings.seekbarpos.length; i++) {
+                editor.putInt("band" + i, com.bullhead.equalizer.Settings.seekbarpos[i]);
+            }
+        }
+        editor.apply();
+        
+        sendActionToService(MusicService.ACTION_RELOAD_EQUALIZER);
     }
 
     private void loadAlbumArt(String path) {
@@ -279,7 +320,10 @@ public class PlayerActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        IntentFilter filter = new IntentFilter(MusicService.BROADCAST_UPDATE_UI);
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(MusicService.BROADCAST_UPDATE_UI);
+        filter.addAction("com.example.parrot.CLOSE_APP");
+        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(updateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {

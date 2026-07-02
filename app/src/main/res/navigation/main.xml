@@ -25,7 +25,7 @@
     <fragment
         android:id="@+id/music_Fragment"
         android:name="com.example.parrot.Music_Fragment"
-        android:label="Music"
+        android:label="PARROT"
         tools:layout="@layout/fragment_music_" />
 
 

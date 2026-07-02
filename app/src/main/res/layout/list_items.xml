@@ -18,26 +18,45 @@ app:cardBackgroundColor="@android:color/transparent"
 
         >
 
-        <ImageView
-            android:id="@+id/songImg"
-            android:layout_width="27dp"
-            android:layout_height="27dp"
+        <androidx.cardview.widget.CardView
+            android:id="@+id/songImgCard"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:layout_alignParentLeft="true"
             android:layout_alignParentTop="true"
             android:layout_marginStart="5dp"
             android:layout_marginEnd="5dp"
-            android:background="@drawable/list_dg"
-            android:src="@drawable/ic_music" />
+            app:cardCornerRadius="8dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="@android:color/transparent">
+            
+            <ImageView
+                android:id="@+id/songImg"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:background="@drawable/list_dg"
+                android:src="@drawable/ic_music" />
+        </androidx.cardview.widget.CardView>
+
+        <ImageView
+            android:id="@+id/btnMore"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentRight="true"
+            android:layout_centerVertical="true"
+            android:padding="8dp"
+            android:src="@drawable/ic_more"
+            app:tint="@color/white" />
 
         <TextView
             android:id="@+id/txtSong"
-            android:layout_width="300dp"
-            android:layout_height="30dp"
-
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:layout_marginStart="5dp"
-            android:layout_marginEnd="15dp"
-
-            android:layout_toRightOf="@+id/songImg"
+            android:layout_marginEnd="5dp"
+            android:layout_toLeftOf="@id/btnMore"
+            android:layout_toRightOf="@+id/songImgCard"
             android:ellipsize="marquee"
             android:marqueeRepeatLimit="marquee_forever"
             android:padding="6dp"
@@ -50,15 +69,18 @@ app:cardBackgroundColor="@android:color/transparent"
 
         <TextView
             android:id="@+id/txtartist"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_below="@+id/txtSong"
-            android:layout_marginLeft="50dp"
+            android:layout_toRightOf="@+id/songImgCard"
+            android:layout_toLeftOf="@id/btnMore"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="5dp"
+            android:ellipsize="end"
+            android:singleLine="true"
             android:text="Artist"
             android:textColor="@color/white"
             android:textSize="10dp" />
-
-
 
     </RelativeLayout>
 

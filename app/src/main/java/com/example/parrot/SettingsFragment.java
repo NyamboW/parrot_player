@@ -1,66 +1,248 @@
 package com.example.parrot;
 
+import android.app.AlertDialog;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
+import android.content.SharedPreferences;
+import android.database.Cursor;
+import android.net.Uri;
 import android.os.Bundle;
-
-import androidx.fragment.app.Fragment;
-
+import android.os.IBinder;
+import android.provider.MediaStore;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
-/**
- * A simple {@link Fragment} subclass.
- * Use the {@link SettingsFragment#newInstance} factory method to
- * create an instance of this fragment.
- */
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.appcompat.widget.SwitchCompat;
+import androidx.core.content.ContextCompat;
+import androidx.fragment.app.Fragment;
+
+import com.bullhead.equalizer.DialogEqualizerFragment;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 public class SettingsFragment extends Fragment {
 
-    // TODO: Rename parameter arguments, choose names that match
-    // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
-    private static final String ARG_PARAM1 = "param1";
-    private static final String ARG_PARAM2 = "param2";
+    private MusicService musicService;
+    private boolean isBound = false;
 
-    // TODO: Rename and change types of parameters
-    private String mParam1;
-    private String mParam2;
+    private SwitchCompat switchDarkMode;
+    private SharedPreferences prefs;
+
+    private static final String PREFS_NAME = "parrot_settings";
+    private static final String KEY_DARK_MODE = "dark_mode";
+    public static final String KEY_MUSIC_FOLDERS = "music_folders";
+
+    private final ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            MusicService.MyBinder binder = (MusicService.MyBinder) service;
+            musicService = binder.getService();
+            isBound = true;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            isBound = false;
+            musicService = null;
+        }
+    };
 
     public SettingsFragment() {
         // Required empty public constructor
     }
 
-    /**
-     * Use this factory method to create a new instance of
-     * this fragment using the provided parameters.
-     *
-     * @param param1 Parameter 1.
-     * @param param2 Parameter 2.
-     * @return A new instance of fragment SettingsFragment.
-     */
-    // TODO: Rename and change types and number of parameters
-    public static SettingsFragment newInstance(String param1, String param2) {
-        SettingsFragment fragment = new SettingsFragment();
-        Bundle args = new Bundle();
-        args.putString(ARG_PARAM1, param1);
-        args.putString(ARG_PARAM2, param2);
-        fragment.setArguments(args);
-        return fragment;
+    @Override
+    public void onStart() {
+        super.onStart();
+        if (getActivity() != null) {
+            Intent bindIntent = new Intent(getActivity(), MusicService.class);
+            getActivity().bindService(bindIntent, serviceConnection, Context.BIND_AUTO_CREATE);
+        }
     }
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        if (getArguments() != null) {
-            mParam1 = getArguments().getString(ARG_PARAM1);
-            mParam2 = getArguments().getString(ARG_PARAM2);
+    public void onStop() {
+        super.onStop();
+        if (isBound && getActivity() != null) {
+            getActivity().unbindService(serviceConnection);
+            isBound = false;
         }
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
-        return inflater.inflate(R.layout.fragment_settings, container, false);
+        View view = inflater.inflate(R.layout.fragment_settings, container, false);
+        
+        prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
 
+        switchDarkMode = view.findViewById(R.id.switch_dark_mode);
+        View settingDarkMode = view.findViewById(R.id.setting_dark_mode);
+        View settingMusicFolders = view.findViewById(R.id.setting_music_folders);
+        View settingEqualizer = view.findViewById(R.id.setting_equalizer);
 
+        // Dark Mode Logic
+        boolean isDarkMode = prefs.getBoolean(KEY_DARK_MODE, true);
+        switchDarkMode.setChecked(isDarkMode);
+
+        View.OnClickListener darkModeListener = v -> {
+            boolean newState = !switchDarkMode.isChecked();
+            if (v == switchDarkMode) {
+                newState = switchDarkMode.isChecked();
+            } else {
+                switchDarkMode.setChecked(newState);
+            }
+            
+            prefs.edit().putBoolean(KEY_DARK_MODE, newState).apply();
+            
+            if (newState) {
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
+            } else {
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+            }
+        };
+
+        settingDarkMode.setOnClickListener(darkModeListener);
+        switchDarkMode.setOnClickListener(darkModeListener);
+
+        // Equalizer Logic
+        settingEqualizer.setOnClickListener(v -> {
+            if (isBound && musicService != null) {
+                int sessionId = musicService.getAudioSessionId();
+                if (sessionId != 0) {
+                    DialogEqualizerFragment fragment = DialogEqualizerFragment.newBuilder()
+                            .setAudioSessionId(sessionId)
+                            .themeColor(android.graphics.Color.parseColor("#0B0B0F"))
+                            .textColor(android.graphics.Color.WHITE)
+                            .accentAlpha(android.graphics.Color.parseColor("#444CAF50"))
+                            .darkColor(android.graphics.Color.parseColor("#0B0B0F"))
+                            .setAccentColor(android.graphics.Color.parseColor("#4CAF50"))
+                            .build();
+                    fragment.show(getChildFragmentManager(), "eq");
+                    
+                    getChildFragmentManager().executePendingTransactions();
+                    if (fragment.getDialog() != null) {
+                        fragment.getDialog().setOnDismissListener(dialog -> {
+                            saveAndReloadEqualizer();
+                        });
+                    }
+                } else {
+                    Toast.makeText(getContext(), "Play a song first to adjust EQ", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(getContext(), "Play a song first to adjust EQ", Toast.LENGTH_SHORT).show();
+            }
+        });
+        // Music Folders Logic
+        settingMusicFolders.setOnClickListener(v -> showFolderSelectionDialog());
+
+        return view;
+    }
+
+    private void showFolderSelectionDialog() {
+        // Find all distinct folders containing music
+        Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+        String selection = MediaStore.Audio.Media.IS_MUSIC + "!=0";
+        Cursor cursor = requireContext().getContentResolver().query(
+                uri,
+                new String[]{MediaStore.Audio.Media.DATA},
+                selection,
+                null,
+                null
+        );
+
+        Set<String> uniqueFolders = new HashSet<>();
+        if (cursor != null) {
+            while (cursor.moveToNext()) {
+                String path = cursor.getString(0);
+                File file = new File(path);
+                String parent = file.getParent();
+                if (parent != null) {
+                    uniqueFolders.add(parent);
+                }
+            }
+            cursor.close();
+        }
+
+        List<String> folderList = new ArrayList<>(uniqueFolders);
+        Collections.sort(folderList);
+
+        if (folderList.isEmpty()) {
+            Toast.makeText(getContext(), "No music folders found", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String[] folderArray = folderList.toArray(new String[0]);
+        boolean[] checkedItems = new boolean[folderArray.length];
+
+        Set<String> savedFolders = prefs.getStringSet(KEY_MUSIC_FOLDERS, null);
+
+        for (int i = 0; i < folderArray.length; i++) {
+            if (savedFolders == null || savedFolders.contains(folderArray[i])) {
+                checkedItems[i] = true;
+            } else {
+                checkedItems[i] = false;
+            }
+        }
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
+        builder.setTitle("Select Music Folders");
+        builder.setMultiChoiceItems(folderArray, checkedItems, (dialog, which, isChecked) -> {
+            checkedItems[which] = isChecked;
+        });
+
+        builder.setPositiveButton("Save", (dialog, which) -> {
+            Set<String> selectedFolders = new HashSet<>();
+            for (int i = 0; i < folderArray.length; i++) {
+                if (checkedItems[i]) {
+                    selectedFolders.add(folderArray[i]);
+                }
+            }
+            prefs.edit().putStringSet(KEY_MUSIC_FOLDERS, selectedFolders).apply();
+            Toast.makeText(getContext(), "Folders saved. Please refresh the music list.", Toast.LENGTH_SHORT).show();
+        });
+
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
+    }
+    
+    private void saveAndReloadEqualizer() {
+        if (getContext() == null) return;
+        android.content.SharedPreferences prefs = getContext().getSharedPreferences("parrot_eq", Context.MODE_PRIVATE);
+        android.content.SharedPreferences.Editor editor = prefs.edit();
+        
+        editor.putBoolean("isEqualizerEnabled", com.bullhead.equalizer.Settings.isEqualizerEnabled);
+        editor.putInt("presetPos", com.bullhead.equalizer.Settings.presetPos);
+        editor.putInt("reverbPreset", com.bullhead.equalizer.Settings.reverbPreset);
+        editor.putInt("bassStrength", com.bullhead.equalizer.Settings.bassStrength);
+        
+        if (com.bullhead.equalizer.Settings.seekbarpos != null) {
+            for (int i = 0; i < com.bullhead.equalizer.Settings.seekbarpos.length; i++) {
+                editor.putInt("band" + i, com.bullhead.equalizer.Settings.seekbarpos[i]);
+            }
+        }
+        editor.apply();
+        
+        Intent intent = new Intent(getContext(), MusicService.class);
+        intent.setAction(MusicService.ACTION_RELOAD_EQUALIZER);
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                getContext().startForegroundService(intent);
+            } else {
+                getContext().startService(intent);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

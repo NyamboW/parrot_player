@@ -18,6 +18,20 @@ public class ApplicationClass extends Application {
     public void onCreate() {
         super.onCreate();
         createNotificationChannels();
+        loadEqualizerSettings();
+    }
+    
+    private void loadEqualizerSettings() {
+        android.content.SharedPreferences prefs = getSharedPreferences("parrot_eq", android.content.Context.MODE_PRIVATE);
+        com.bullhead.equalizer.Settings.isEqualizerEnabled = prefs.getBoolean("isEqualizerEnabled", true);
+        com.bullhead.equalizer.Settings.presetPos = prefs.getInt("presetPos", 0);
+        com.bullhead.equalizer.Settings.reverbPreset = (short) prefs.getInt("reverbPreset", -1);
+        com.bullhead.equalizer.Settings.bassStrength = (short) prefs.getInt("bassStrength", -1);
+        
+        com.bullhead.equalizer.Settings.seekbarpos = new int[5];
+        for (int i = 0; i < 5; i++) {
+            com.bullhead.equalizer.Settings.seekbarpos[i] = prefs.getInt("band" + i, 0);
+        }
     }
 
     private void createNotificationChannels() {

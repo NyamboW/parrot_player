@@ -66,7 +66,25 @@ public class AboutUsFragment extends Fragment {
         // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.fragment_about_us, container, false);
 
-        btnContact= (Button) view.findViewById(R.id.btnContact);
+        btnContact = view.findViewById(R.id.btnContact);
+        View btnWebsite = view.findViewById(R.id.btnWebsite);
+        View btnPlaystore = view.findViewById(R.id.btnPlaystore);
+
+        btnWebsite.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/misterw"));
+                startActivity(browserIntent);
+            }
+        });
+
+        btnPlaystore.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent playstoreIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/developer?id=POINTBLANK"));
+                startActivity(playstoreIntent);
+            }
+        });
 
         /*
         button for contact with developer

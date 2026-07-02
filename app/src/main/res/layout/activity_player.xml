@@ -54,17 +54,26 @@
     </LinearLayout>
 
     <!-- Album Art -->
-    <ImageView
-        android:id="@+id/imgView"
+    <androidx.cardview.widget.CardView
+        android:id="@+id/imgViewCard"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_margin="24dp"
-        android:scaleType="centerCrop"
-        android:src="@drawable/picon"
+        app:cardCornerRadius="32dp"
+        app:cardElevation="10dp"
+        app:cardBackgroundColor="@android:color/transparent"
         app:layout_constraintTop_toBottomOf="@id/topBar"
         app:layout_constraintBottom_toTopOf="@id/playerControls"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"/>
+        app:layout_constraintEnd_toEndOf="parent">
+        
+        <ImageView
+            android:id="@+id/imgView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:src="@drawable/ic_music" />
+    </androidx.cardview.widget.CardView>
 
     <!-- Player Controls -->
     <LinearLayout
