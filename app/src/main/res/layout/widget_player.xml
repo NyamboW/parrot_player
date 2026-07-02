@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_bg"
+    android:gravity="center_vertical"
+    android:padding="8dp">
+
+    <ImageView
+        android:id="@+id/widgetAlbumArt"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:src="@drawable/theicon"
+        android:scaleType="centerCrop"
+        android:layout_marginEnd="8dp" />
+
+    <TextView
+        android:id="@+id/widgetSongName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="No song playing"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:singleLine="true"
+        android:ellipsize="end" />
+
+    <ImageButton
+        android:id="@+id/widgetPrev"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:src="@drawable/ic_previous"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:tint="#FFFFFF"/>
+
+    <ImageButton
+        android:id="@+id/widgetPlayPause"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:src="@drawable/ic_play"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:tint="#FFFFFF"/>
+
+    <ImageButton
+        android:id="@+id/widgetNext"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:src="@drawable/ic_next"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:tint="#FFFFFF"/>
+</LinearLayout>
