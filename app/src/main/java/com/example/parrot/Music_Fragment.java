@@ -7,11 +7,15 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
+import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -49,6 +53,13 @@ public class Music_Fragment extends Fragment {
     ArrayList<String> songList = new ArrayList<>();
     FavouritesManager favManager;
     
+    // Search
+    EditText editSearch;
+    ImageButton btnClearSearch;
+    ArrayList<String> filteredSongList = new ArrayList<>();
+    String[] filteredItems;
+    String[] filteredArtists;
+    
     String currentSortOrder = MediaStore.Audio.Media.DATE_ADDED + " DESC";
     Spinner spinnerSort;
     boolean isSpinnerInitialized = false;
@@ -80,6 +91,30 @@ public class Music_Fragment extends Fragment {
 
         listView = view.findViewById(R.id.listView);
         favManager = new FavouritesManager(requireContext());
+        
+        // Search
+        editSearch = view.findViewById(R.id.editSearch);
+        btnClearSearch = view.findViewById(R.id.btnClearSearch);
+        
+        editSearch.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                filterSongs(s.toString());
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                btnClearSearch.setVisibility(s.length() > 0 ? View.VISIBLE : View.GONE);
+            }
+        });
+        
+        btnClearSearch.setOnClickListener(v -> {
+            editSearch.setText("");
+            editSearch.clearFocus();
+        });
         
         spinnerSort = view.findViewById(R.id.spinnerSort);
         String[] sortOptions = {"Date Added", "A-Z", "By Folder"};
@@ -219,12 +254,55 @@ public class Music_Fragment extends Fragment {
             items[i] = name.replace(".mp3", "").replace(".wav", "");
             artists[i] = artistList.get(i);
         }
+        
+        // Apply current search filter
+        String currentQuery = editSearch != null ? editSearch.getText().toString() : "";
+        if (currentQuery.isEmpty()) {
+            filteredSongList = new ArrayList<>(songList);
+            filteredItems = items.clone();
+            filteredArtists = artists.clone();
+        } else {
+            filterSongs(currentQuery);
+            return; // filterSongs calls setAdapter
+        }
 
+        setAdapter();
+    }
+    
+    private void filterSongs(String query) {
+        filteredSongList.clear();
+        ArrayList<String> tempItems = new ArrayList<>();
+        ArrayList<String> tempArtists = new ArrayList<>();
+        
+        if (query.isEmpty()) {
+            filteredSongList.addAll(songList);
+            for (String item : items) tempItems.add(item);
+            for (String artist : artists) tempArtists.add(artist);
+        } else {
+            String lowerQuery = query.toLowerCase();
+            for (int i = 0; i < songList.size(); i++) {
+                boolean matchName = items[i].toLowerCase().contains(lowerQuery);
+                boolean matchArtist = artists[i].toLowerCase().contains(lowerQuery);
+                if (matchName || matchArtist) {
+                    filteredSongList.add(songList.get(i));
+                    tempItems.add(items[i]);
+                    tempArtists.add(artists[i]);
+                }
+            }
+        }
+        
+        filteredItems = tempItems.toArray(new String[0]);
+        filteredArtists = tempArtists.toArray(new String[0]);
+        
+        setAdapter();
+    }
+    
+    private void setAdapter() {
         listView.setAdapter(new BaseAdapter() {
 
             @Override
             public int getCount() {
-                return items.length;
+                return filteredItems.length;
             }
 
             @Override
@@ -246,12 +324,12 @@ public class Music_Fragment extends Fragment {
                 ImageView img = v.findViewById(R.id.songImg);
                 ImageView btnMore = v.findViewById(R.id.btnMore);
                 
-                txt.setText(items[i]);
+                txt.setText(filteredItems[i]);
                 if (txtArtist != null) {
-                    txtArtist.setText(artists[i]);
+                    txtArtist.setText(filteredArtists[i]);
                 }
                 
-                String path = songList.get(i);
+                String path = filteredSongList.get(i);
                 img.setTag(path);
                 
                 if (btnMore != null) {
@@ -270,6 +348,20 @@ public class Music_Fragment extends Fragment {
                                 return true;
                             } else if (item.getItemId() == R.id.action_delete) {
                                 deleteSong(path);
+                                return true;
+                            } else if (item.getItemId() == R.id.action_play_next) {
+                                Intent intent = new Intent(getContext(), MusicService.class);
+                                intent.setAction(MusicService.ACTION_PLAY_NEXT);
+                                intent.putExtra("songPath", path);
+                                requireContext().startService(intent);
+                                Toast.makeText(getContext(), "Will play next", Toast.LENGTH_SHORT).show();
+                                return true;
+                            } else if (item.getItemId() == R.id.action_add_to_queue) {
+                                Intent intent = new Intent(getContext(), MusicService.class);
+                                intent.setAction(MusicService.ACTION_ADD_TO_QUEUE);
+                                intent.putExtra("songPath", path);
+                                requireContext().startService(intent);
+                                Toast.makeText(getContext(), "Added to queue", Toast.LENGTH_SHORT).show();
                                 return true;
                             }
                             return false;
@@ -314,10 +406,14 @@ public class Music_Fragment extends Fragment {
         });
 
         listView.setOnItemClickListener((AdapterView<?> parent, View view, int position, long id) -> {
+            // Pass the full song list but find the correct position for the tapped filtered song
+            String tappedPath = filteredSongList.get(position);
+            int actualPosition = songList.indexOf(tappedPath);
+            if (actualPosition == -1) actualPosition = position;
 
             Intent intent = new Intent(getContext(), PlayerActivity.class);
             intent.putStringArrayListExtra("songs", songList);
-            intent.putExtra("pos", position);
+            intent.putExtra("pos", actualPosition);
             startActivity(intent);
         });
     }

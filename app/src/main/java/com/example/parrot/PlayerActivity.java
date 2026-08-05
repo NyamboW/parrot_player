@@ -37,7 +37,7 @@ public class PlayerActivity extends AppCompatActivity {
     SeekBar seekBar;
     ImageView imgView;
 
-    ImageButton btnPlay, btnNext, btnPrev, btnRepeat, btnShuffle, btnFav, btnEq, btnBack;
+    ImageButton btnPlay, btnNext, btnPrev, btnRepeat, btnShuffle, btnFav, btnEq, btnBack, btnQueue;
 
     FavouritesManager favManager;
     String currentSongPath;
@@ -129,6 +129,7 @@ public class PlayerActivity extends AppCompatActivity {
         btnFav = findViewById(R.id.btnfav);
         btnEq = findViewById(R.id.btnEq);
         btnBack = findViewById(R.id.btnback);
+        btnQueue = findViewById(R.id.btnQueue);
 
         mySongs = getIntent().getStringArrayListExtra("songs");
         position = getIntent().getIntExtra("pos", 0);
@@ -199,6 +200,11 @@ public class PlayerActivity extends AppCompatActivity {
         startSeekBarUpdate();
 
         btnBack.setOnClickListener(v -> finish());
+
+        btnQueue.setOnClickListener(v -> {
+            QueueBottomSheetFragment queueSheet = new QueueBottomSheetFragment();
+            queueSheet.show(getSupportFragmentManager(), "queue");
+        });
 
         btnEq.setOnClickListener(v -> {
             if (isBound && musicService != null) {

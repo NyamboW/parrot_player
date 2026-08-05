@@ -6,11 +6,15 @@ import android.graphics.BitmapFactory;
 import android.media.MediaMetadataRetriever;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.LruCache;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -47,6 +51,12 @@ public class FavFragment extends Fragment {
     private int currentFavSortMode = 0; // 0: Date, 1: A-Z, 2: Folder
     private Spinner spinnerSortFav;
     private boolean isFavSpinnerInitialized = false;
+    
+    // Search
+    private EditText editSearchFav;
+    private ImageButton btnClearSearchFav;
+    private ArrayList<String> filteredFavSongs = new ArrayList<>();
+    private String[] filteredDisplayNames;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -72,6 +82,30 @@ public class FavFragment extends Fragment {
 
         favListView = view.findViewById(R.id.favListView);
         txtEmpty = view.findViewById(R.id.txtEmpty);
+        
+        // Search
+        editSearchFav = view.findViewById(R.id.editSearchFav);
+        btnClearSearchFav = view.findViewById(R.id.btnClearSearchFav);
+        
+        editSearchFav.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                filterFavSongs(s.toString());
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                btnClearSearchFav.setVisibility(s.length() > 0 ? View.VISIBLE : View.GONE);
+            }
+        });
+        
+        btnClearSearchFav.setOnClickListener(v -> {
+            editSearchFav.setText("");
+            editSearchFav.clearFocus();
+        });
         
         spinnerSortFav = view.findViewById(R.id.spinnerSortFav);
         if (spinnerSortFav != null) {
@@ -149,16 +183,70 @@ public class FavFragment extends Fragment {
             String name = fullPath.substring(fullPath.lastIndexOf("/") + 1);
             displayNames[i] = name.replace(".mp3", "").replace(".wav", "").replace(".m4a", "").replace(".flac", "");
         }
+        
+        // Apply current search filter
+        String currentQuery = editSearchFav != null ? editSearchFav.getText().toString() : "";
+        if (currentQuery.isEmpty()) {
+            filteredFavSongs = new ArrayList<>(favSongs);
+            filteredDisplayNames = displayNames.clone();
+        } else {
+            filterFavSongs(currentQuery);
+            return; // filterFavSongs calls setFavAdapter
+        }
 
+        setFavAdapter();
+    }
+    
+    private void filterFavSongs(String query) {
+        filteredFavSongs.clear();
+        ArrayList<String> tempNames = new ArrayList<>();
+        
+        if (query.isEmpty()) {
+            filteredFavSongs.addAll(favSongs);
+            if (displayNames != null) {
+                for (String name : displayNames) tempNames.add(name);
+            }
+        } else {
+            String lowerQuery = query.toLowerCase();
+            for (int i = 0; i < favSongs.size(); i++) {
+                if (displayNames == null || i >= displayNames.length) break;
+                boolean matchName = displayNames[i].toLowerCase().contains(lowerQuery);
+                String artist = artistCache.get(favSongs.get(i));
+                boolean matchArtist = artist != null && artist.toLowerCase().contains(lowerQuery);
+                if (matchName || matchArtist) {
+                    filteredFavSongs.add(favSongs.get(i));
+                    tempNames.add(displayNames[i]);
+                }
+            }
+        }
+        
+        filteredDisplayNames = tempNames.toArray(new String[0]);
+        
+        if (filteredFavSongs.isEmpty() && !query.isEmpty()) {
+            txtEmpty.setVisibility(View.VISIBLE);
+            txtEmpty.setText("No results found");
+            favListView.setVisibility(View.GONE);
+        } else if (favSongs.isEmpty()) {
+            txtEmpty.setVisibility(View.VISIBLE);
+            txtEmpty.setText("No favourites yet. Tap the heart icon on a song to add it here.");
+            favListView.setVisibility(View.GONE);
+        } else {
+            txtEmpty.setVisibility(View.GONE);
+            favListView.setVisibility(View.VISIBLE);
+            setFavAdapter();
+        }
+    }
+    
+    private void setFavAdapter() {
         adapter = new BaseAdapter() {
             @Override
             public int getCount() {
-                return displayNames.length;
+                return filteredDisplayNames.length;
             }
 
             @Override
             public Object getItem(int i) {
-                return favSongs.get(i);
+                return filteredFavSongs.get(i);
             }
 
             @Override
@@ -174,9 +262,9 @@ public class FavFragment extends Fragment {
                 ImageView img = v.findViewById(R.id.songImg);
                 ImageView btnMore = v.findViewById(R.id.btnMore);
 
-                txt.setText(displayNames[i]);
+                txt.setText(filteredDisplayNames[i]);
 
-                String path = favSongs.get(i);
+                String path = filteredFavSongs.get(i);
                 img.setTag(path);
                 
                 if (artistCache.containsKey(path)) {
@@ -197,6 +285,20 @@ public class FavFragment extends Fragment {
                                 return true;
                             } else if (item.getItemId() == R.id.action_delete) {
                                 deleteSong(path);
+                                return true;
+                            } else if (item.getItemId() == R.id.action_play_next) {
+                                Intent intent = new Intent(getContext(), MusicService.class);
+                                intent.setAction(MusicService.ACTION_PLAY_NEXT);
+                                intent.putExtra("songPath", path);
+                                requireContext().startService(intent);
+                                Toast.makeText(getContext(), "Will play next", Toast.LENGTH_SHORT).show();
+                                return true;
+                            } else if (item.getItemId() == R.id.action_add_to_queue) {
+                                Intent intent = new Intent(getContext(), MusicService.class);
+                                intent.setAction(MusicService.ACTION_ADD_TO_QUEUE);
+                                intent.putExtra("songPath", path);
+                                requireContext().startService(intent);
+                                Toast.makeText(getContext(), "Added to queue", Toast.LENGTH_SHORT).show();
                                 return true;
                             }
                             return false;
@@ -252,14 +354,19 @@ public class FavFragment extends Fragment {
         favListView.setAdapter(adapter);
 
         favListView.setOnItemClickListener((parent, view, position, id) -> {
+            // Use filtered list for playback but pass correct position
+            String tappedPath = filteredFavSongs.get(position);
+            int actualPosition = favSongs.indexOf(tappedPath);
+            if (actualPosition == -1) actualPosition = position;
+            
             Intent intent = new Intent(getContext(), PlayerActivity.class);
             intent.putStringArrayListExtra("songs", favSongs);
-            intent.putExtra("pos", position);
+            intent.putExtra("pos", actualPosition);
             startActivity(intent);
         });
 
         favListView.setOnItemLongClickListener((parent, view, position, id) -> {
-            String path = favSongs.get(position);
+            String path = filteredFavSongs.get(position);
             favManager.removeFavourite(path);
             loadFavourites();
             return true;

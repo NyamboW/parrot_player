@@ -49,8 +49,11 @@ public class MusicService extends Service {
     public static final String ACTION_REQUEST_UPDATE = "ACTION_REQUEST_UPDATE";
     public static final String ACTION_RELOAD_EQUALIZER = "ACTION_RELOAD_EQUALIZER";
     public static final String ACTION_CLOSE = "ACTION_CLOSE";
+    public static final String ACTION_ADD_TO_QUEUE = "ACTION_ADD_TO_QUEUE";
+    public static final String ACTION_PLAY_NEXT = "ACTION_PLAY_NEXT";
     
     public static final String BROADCAST_UPDATE_UI = "com.example.parrot.UPDATE_UI";
+    public static final String BROADCAST_QUEUE_UPDATED = "com.example.parrot.QUEUE_UPDATED";
 
     private final IBinder binder = new MyBinder();
     
@@ -59,6 +62,8 @@ public class MusicService extends Service {
     private int position = 0;
     private boolean isShuffle = false;
     private boolean isRepeat = false;
+    
+    private QueueManager queueManager = new QueueManager();
     
     private Equalizer mEqualizer;
     private BassBoost mBassBoost;
@@ -207,6 +212,20 @@ public class MusicService extends Service {
                 case ACTION_RELOAD_EQUALIZER:
                     loadEqualizerSettings();
                     break;
+                case ACTION_ADD_TO_QUEUE:
+                    String queuePath = intent.getStringExtra("songPath");
+                    if (queuePath != null) {
+                        queueManager.addToQueue(queuePath);
+                        broadcastQueueUpdate();
+                    }
+                    break;
+                case ACTION_PLAY_NEXT:
+                    String nextPath = intent.getStringExtra("songPath");
+                    if (nextPath != null) {
+                        queueManager.playNext(nextPath);
+                        broadcastQueueUpdate();
+                    }
+                    break;
                 case ACTION_CLOSE:
                     safeRelease();
                     stopForeground(true);
@@ -245,10 +264,100 @@ public class MusicService extends Service {
         mediaPlayer.setOnCompletionListener(mp -> {
             if (isRepeat) {
                 playSong(position);
+            } else if (!queueManager.isEmpty()) {
+                // Play next song from queue
+                playNextFromQueue();
             } else {
                 nextSong();
             }
         });
+    }
+    
+    /**
+     * Play the next song from the queue.
+     */
+    private void playNextFromQueue() {
+        String nextPath = queueManager.pollNext();
+        if (nextPath != null) {
+            // Insert it into the current playlist position context so prev/next still work
+            int insertIndex = position + 1;
+            if (insertIndex > mySongs.size()) insertIndex = mySongs.size();
+            mySongs.add(insertIndex, nextPath);
+            position = insertIndex;
+            
+            safeRelease();
+            
+            Uri uri = Uri.parse(nextPath);
+            mediaPlayer = MediaPlayer.create(this, uri);
+            if (mediaPlayer == null) return;
+            
+            setupEqualizer();
+            
+            int result = AudioManagerCompat.requestAudioFocus(audioManager, audioFocusRequest);
+            if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                mediaPlayer.start();
+                updateMediaSession();
+                showNotification(R.drawable.ic_pause);
+                broadcastUIUpdate();
+            }
+            
+            mediaPlayer.setOnCompletionListener(mp -> {
+                if (isRepeat) {
+                    playSong(position);
+                } else if (!queueManager.isEmpty()) {
+                    playNextFromQueue();
+                } else {
+                    nextSong();
+                }
+            });
+            
+            broadcastQueueUpdate();
+        }
+    }
+    
+    /**
+     * Play a specific song from the queue by index (tap in queue viewer).
+     */
+    public void playFromQueue(int queueIndex) {
+        ArrayList<String> queue = queueManager.getQueue();
+        if (queueIndex >= 0 && queueIndex < queue.size()) {
+            String path = queue.get(queueIndex);
+            queueManager.removeFromQueue(queueIndex);
+            
+            // Insert and play
+            int insertIndex = position + 1;
+            if (insertIndex > mySongs.size()) insertIndex = mySongs.size();
+            mySongs.add(insertIndex, path);
+            position = insertIndex;
+            
+            safeRelease();
+            
+            Uri uri = Uri.parse(path);
+            mediaPlayer = MediaPlayer.create(this, uri);
+            if (mediaPlayer == null) return;
+            
+            setupEqualizer();
+            
+            int result = AudioManagerCompat.requestAudioFocus(audioManager, audioFocusRequest);
+            if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                mediaPlayer.start();
+                updateMediaSession();
+                showNotification(R.drawable.ic_pause);
+                broadcastUIUpdate();
+            }
+            
+            mediaPlayer.setOnCompletionListener(mp -> {
+                if (isRepeat) {
+                    playSong(position);
+                } else if (!queueManager.isEmpty()) {
+                    playNextFromQueue();
+                } else {
+                    nextSong();
+                }
+            });
+            
+            broadcastQueueUpdate();
+        }
     }
 
     public void togglePlay() {
@@ -271,6 +380,12 @@ public class MusicService extends Service {
 
     public void nextSong() {
         if (mySongs.isEmpty()) return;
+
+        // Check queue first
+        if (!queueManager.isEmpty()) {
+            playNextFromQueue();
+            return;
+        }
 
         if (isShuffle) {
             position = new Random().nextInt(mySongs.size());
@@ -382,6 +497,12 @@ public class MusicService extends Service {
         }
     }
     
+    private void broadcastQueueUpdate() {
+        Intent intent = new Intent(BROADCAST_QUEUE_UPDATED);
+        intent.setPackage(getPackageName());
+        sendBroadcast(intent);
+    }
+    
     private void updateMediaSession() {
         if (mediaPlayer == null) return;
         
@@ -491,6 +612,32 @@ public class MusicService extends Service {
     
     public void setRepeat(boolean repeat) {
         isRepeat = repeat;
+    }
+    
+    // Queue accessors
+    
+    public ArrayList<String> getQueueList() {
+        return queueManager.getQueue();
+    }
+    
+    public void addToQueue(String songPath) {
+        queueManager.addToQueue(songPath);
+        broadcastQueueUpdate();
+    }
+    
+    public void addPlayNext(String songPath) {
+        queueManager.playNext(songPath);
+        broadcastQueueUpdate();
+    }
+    
+    public void removeFromQueue(int index) {
+        queueManager.removeFromQueue(index);
+        broadcastQueueUpdate();
+    }
+    
+    public void clearQueue() {
+        queueManager.clearQueue();
+        broadcastQueueUpdate();
     }
 
     @Override
