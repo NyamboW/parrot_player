@@ -20,6 +20,9 @@ import android.media.audiofx.BassBoost;
 import android.media.audiofx.PresetReverb;
 import android.content.SharedPreferences;
 import android.content.Context;
+import android.media.AudioManager;
+import androidx.media.AudioFocusRequestCompat;
+import androidx.media.AudioManagerCompat;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
@@ -62,10 +65,60 @@ public class MusicService extends Service {
     private PresetReverb mPresetReverb;
 
     private MediaSessionCompat mediaSession;
+    
+    private AudioManager audioManager;
+    private AudioFocusRequestCompat audioFocusRequest;
+    private AudioManager.OnAudioFocusChangeListener audioFocusChangeListener;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        audioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
+            @Override
+            public void onAudioFocusChange(int focusChange) {
+                if (mediaPlayer == null) return;
+                
+                switch (focusChange) {
+                    case AudioManager.AUDIOFOCUS_GAIN:
+                        if (!mediaPlayer.isPlaying()) {
+                            mediaPlayer.start();
+                            updateMediaSession();
+                            showNotification(R.drawable.ic_pause);
+                            broadcastUIUpdate();
+                        }
+                        mediaPlayer.setVolume(1.0f, 1.0f);
+                        break;
+                    case AudioManager.AUDIOFOCUS_LOSS:
+                        if (mediaPlayer.isPlaying()) {
+                            mediaPlayer.pause();
+                            updateMediaSession();
+                            showNotification(R.drawable.ic_play);
+                            broadcastUIUpdate();
+                        }
+                        break;
+                    case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                        if (mediaPlayer.isPlaying()) {
+                            mediaPlayer.pause();
+                            updateMediaSession();
+                            showNotification(R.drawable.ic_play);
+                            broadcastUIUpdate();
+                        }
+                        break;
+                    case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
+                        if (mediaPlayer.isPlaying()) {
+                            mediaPlayer.setVolume(0.1f, 0.1f);
+                        }
+                        break;
+                }
+            }
+        };
+        
+        audioFocusRequest = new AudioFocusRequestCompat.Builder(AudioManagerCompat.AUDIOFOCUS_GAIN)
+                .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                .build();
+                
         mediaSession = new MediaSessionCompat(this, "MusicService");
         mediaSession.setCallback(new MediaSessionCompat.Callback() {
             @Override
@@ -181,10 +234,13 @@ public class MusicService extends Service {
 
         setupEqualizer();
 
-        mediaPlayer.start();
-        updateMediaSession();
-        showNotification(R.drawable.ic_pause);
-        broadcastUIUpdate();
+        int result = AudioManagerCompat.requestAudioFocus(audioManager, audioFocusRequest);
+        if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+            mediaPlayer.start();
+            updateMediaSession();
+            showNotification(R.drawable.ic_pause);
+            broadcastUIUpdate();
+        }
 
         mediaPlayer.setOnCompletionListener(mp -> {
             if (isRepeat) {
@@ -203,9 +259,12 @@ public class MusicService extends Service {
             updateMediaSession();
             showNotification(R.drawable.ic_play);
         } else {
-            mediaPlayer.start();
-            updateMediaSession();
-            showNotification(R.drawable.ic_pause);
+            int result = AudioManagerCompat.requestAudioFocus(audioManager, audioFocusRequest);
+            if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                mediaPlayer.start();
+                updateMediaSession();
+                showNotification(R.drawable.ic_pause);
+            }
         }
         broadcastUIUpdate();
     }
@@ -237,6 +296,9 @@ public class MusicService extends Service {
             mediaPlayer.stop();
             mediaPlayer.release();
             mediaPlayer = null;
+        }
+        if (audioManager != null && audioFocusRequest != null) {
+            AudioManagerCompat.abandonAudioFocusRequest(audioManager, audioFocusRequest);
         }
     }
 
