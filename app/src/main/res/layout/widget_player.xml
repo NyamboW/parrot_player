@@ -5,48 +5,66 @@
     android:orientation="horizontal"
     android:background="@drawable/widget_bg"
     android:gravity="center_vertical"
-    android:padding="8dp">
+    android:padding="12dp">
 
     <ImageView
         android:id="@+id/widgetAlbumArt"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
         android:src="@drawable/theicon"
         android:scaleType="centerCrop"
         android:layout_marginEnd="8dp" />
 
-    <TextView
-        android:id="@+id/widgetSongName"
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:text="No song playing"
-        android:textColor="#FFFFFF"
-        android:textSize="14sp"
-        android:singleLine="true"
-        android:ellipsize="end" />
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
 
-    <ImageButton
-        android:id="@+id/widgetPrev"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:src="@drawable/ic_previous"
-        android:background="?android:attr/selectableItemBackgroundBorderless"
-        android:tint="#FFFFFF"/>
+        <TextView
+            android:id="@+id/widgetSongName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="No song playing"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:gravity="center_horizontal"
+            android:layout_marginBottom="4dp"/>
 
-    <ImageButton
-        android:id="@+id/widgetPlayPause"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:src="@drawable/ic_play"
-        android:background="?android:attr/selectableItemBackgroundBorderless"
-        android:tint="#FFFFFF"/>
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
 
-    <ImageButton
-        android:id="@+id/widgetNext"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:src="@drawable/ic_next"
-        android:background="?android:attr/selectableItemBackgroundBorderless"
-        android:tint="#FFFFFF"/>
+            <ImageButton
+                android:id="@+id/widgetPrev"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_previous"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:tint="#FFFFFF"/>
+
+            <ImageButton
+                android:id="@+id/widgetPlayPause"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_play"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:tint="#FFFFFF"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"/>
+
+            <ImageButton
+                android:id="@+id/widgetNext"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_next"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:tint="#FFFFFF"/>
+        </LinearLayout>
+    </LinearLayout>
 </LinearLayout>

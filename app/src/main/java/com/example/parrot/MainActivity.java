@@ -97,11 +97,11 @@ public class MainActivity extends AppCompatActivity {
                 startActivity(new Intent(this, PlayerActivity.class))
         );
 
-        ImageView imageMenu = findViewById(R.id.imageMenu);
+        androidx.appcompat.widget.Toolbar toolbar = findViewById(R.id.layoutToolBar);
+        setSupportActionBar(toolbar);
+
         DrawerLayout drawerLayout = findViewById(R.id.drawerLayout);
         NavigationView navigationView = findViewById(R.id.navigationView);
-        
-        TextView textTitle = findViewById(R.id.textTitle);
         
         NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.navHostFragment);
@@ -109,11 +109,11 @@ public class MainActivity extends AppCompatActivity {
             NavController navController = navHostFragment.getNavController();
             NavigationUI.setupWithNavController(navigationView, navController);
             
-            navController.addOnDestinationChangedListener((controller, destination, arguments) -> {
-                if (destination.getLabel() != null) {
-                    textTitle.setText(destination.getLabel());
-                }
-            });
+            androidx.navigation.ui.AppBarConfiguration appBarConfiguration =
+                new androidx.navigation.ui.AppBarConfiguration.Builder(navController.getGraph())
+                .setOpenableLayout(drawerLayout)
+                .build();
+            NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
             
             // Close drawer when an item is selected
             navigationView.setNavigationItemSelectedListener(item -> {
@@ -124,8 +124,6 @@ public class MainActivity extends AppCompatActivity {
                 return handled;
             });
         }
-        
-        imageMenu.setOnClickListener(v -> drawerLayout.openDrawer(GravityCompat.START));
     }
 
     @Override
@@ -140,5 +138,20 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         if (miniReceiver != null) unregisterReceiver(miniReceiver);
+    }
+
+    @Override
+    public boolean onSupportNavigateUp() {
+        NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager().findFragmentById(R.id.navHostFragment);
+        if (navHostFragment != null) {
+            NavController navController = navHostFragment.getNavController();
+            DrawerLayout drawerLayout = findViewById(R.id.drawerLayout);
+            androidx.navigation.ui.AppBarConfiguration appBarConfiguration =
+                    new androidx.navigation.ui.AppBarConfiguration.Builder(navController.getGraph())
+                            .setOpenableLayout(drawerLayout)
+                            .build();
+            return NavigationUI.navigateUp(navController, appBarConfiguration) || super.onSupportNavigateUp();
+        }
+        return super.onSupportNavigateUp();
     }
 }

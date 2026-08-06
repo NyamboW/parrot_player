@@ -27,7 +27,12 @@ import android.provider.MediaStore;
 import java.util.HashMap;
 import java.util.Collections;
 import java.util.Comparator;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
+import android.widget.SearchView;
 
+import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 
 import java.io.File;
@@ -49,18 +54,18 @@ public class FavFragment extends Fragment {
     private HashMap<String, String> artistCache = new HashMap<>();
 
     private int currentFavSortMode = 0; // 0: Date, 1: A-Z, 2: Folder
-    private Spinner spinnerSortFav;
-    private boolean isFavSpinnerInitialized = false;
     
     // Search
-    private EditText editSearchFav;
-    private ImageButton btnClearSearchFav;
     private ArrayList<String> filteredFavSongs = new ArrayList<>();
     private String[] filteredDisplayNames;
+    
+    // Maintain current search query to apply when loading songs
+    private String currentQuery = "";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setHasOptionsMenu(true);
         favManager = new FavouritesManager(requireContext());
         executorService = Executors.newFixedThreadPool(4);
 
@@ -83,53 +88,8 @@ public class FavFragment extends Fragment {
         favListView = view.findViewById(R.id.favListView);
         txtEmpty = view.findViewById(R.id.txtEmpty);
         
-        // Search
-        editSearchFav = view.findViewById(R.id.editSearchFav);
-        btnClearSearchFav = view.findViewById(R.id.btnClearSearchFav);
+        // Search views removed from layout, handled via OptionsMenu
         
-        editSearchFav.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                filterFavSongs(s.toString());
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-                btnClearSearchFav.setVisibility(s.length() > 0 ? View.VISIBLE : View.GONE);
-            }
-        });
-        
-        btnClearSearchFav.setOnClickListener(v -> {
-            editSearchFav.setText("");
-            editSearchFav.clearFocus();
-        });
-        
-        spinnerSortFav = view.findViewById(R.id.spinnerSortFav);
-        if (spinnerSortFav != null) {
-            String[] sortOptions = {"Date Added", "A-Z", "By Folder"};
-            ArrayAdapter<String> spinnerAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, sortOptions);
-            spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            spinnerSortFav.setAdapter(spinnerAdapter);
-
-            spinnerSortFav.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                    currentFavSortMode = position;
-                    if (isFavSpinnerInitialized) {
-                        loadFavourites();
-                    } else {
-                        isFavSpinnerInitialized = true;
-                    }
-                }
-
-                @Override
-                public void onNothingSelected(AdapterView<?> parent) {}
-            });
-        }
-
         return view;
     }
 
@@ -185,7 +145,6 @@ public class FavFragment extends Fragment {
         }
         
         // Apply current search filter
-        String currentQuery = editSearchFav != null ? editSearchFav.getText().toString() : "";
         if (currentQuery.isEmpty()) {
             filteredFavSongs = new ArrayList<>(favSongs);
             filteredDisplayNames = displayNames.clone();
@@ -300,6 +259,9 @@ public class FavFragment extends Fragment {
                                 requireContext().startService(intent);
                                 Toast.makeText(getContext(), "Added to queue", Toast.LENGTH_SHORT).show();
                                 return true;
+                            } else if (item.getItemId() == R.id.action_add_to_playlist) {
+                                showAddToPlaylistDialog(path);
+                                return true;
                             }
                             return false;
                         });
@@ -392,5 +354,50 @@ public class FavFragment extends Fragment {
         } catch (Exception e) {
             Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
+    }
+
+    @Override
+    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+        inflater.inflate(R.menu.menu, menu);
+        MenuItem searchItem = menu.findItem(R.id.item_search);
+        if (searchItem != null) {
+            SearchView searchView = (SearchView) searchItem.getActionView();
+            if (searchView != null) {
+                searchView.setQueryHint("Search favourites...");
+                searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+                    @Override
+                    public boolean onQueryTextSubmit(String query) {
+                        return false;
+                    }
+
+                    @Override
+                    public boolean onQueryTextChange(String newText) {
+                        currentQuery = newText;
+                        filterFavSongs(newText);
+                        return true;
+                    }
+                });
+            }
+        }
+        super.onCreateOptionsMenu(menu, inflater);
+    }
+
+    private void showAddToPlaylistDialog(String songPath) {
+        PlaylistManager playlistManager = new PlaylistManager(requireContext());
+        ArrayList<String> playlists = playlistManager.getPlaylists();
+        if (playlists.isEmpty()) {
+            Toast.makeText(getContext(), "No playlists available. Create one first.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String[] playlistArray = playlists.toArray(new String[0]);
+        new android.app.AlertDialog.Builder(requireContext())
+            .setTitle("Add to Playlist")
+            .setItems(playlistArray, (dialog, which) -> {
+                String selectedPlaylist = playlistArray[which];
+                playlistManager.addSongToPlaylist(selectedPlaylist, songPath);
+                Toast.makeText(getContext(), "Added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
+            })
+            .show();
     }
 }

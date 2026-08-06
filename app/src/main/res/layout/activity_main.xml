@@ -15,34 +15,16 @@
         android:layout_height="match_parent">
 
         <!-- TOOLBAR -->
-        <LinearLayout
+        <androidx.appcompat.widget.Toolbar
             android:id="@+id/layoutToolBar"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:orientation="horizontal"
-            android:paddingStart="15dp"
-            android:paddingEnd="15dp"
+            android:layout_height="?attr/actionBarSize"
             android:background="#000000"
+            app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
+            app:popupTheme="@style/ThemeOverlay.AppCompat.Light"
+            app:titleTextColor="#FFFFFF"
             app:layout_constraintTop_toTopOf="parent">
-
-            <ImageView
-                android:id="@+id/imageMenu"
-                android:layout_width="30dp"
-                android:layout_height="30dp"
-                android:src="@drawable/ic_menu"
-                android:layout_marginTop="10dp"
-                app:tint="#FFFFFF"/>
-
-            <TextView
-                android:id="@+id/textTitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="PARROT"
-                android:textColor="#FFFFFF"
-                android:textSize="18sp"
-                android:layout_marginStart="15dp"
-                android:layout_marginTop="12dp"/>
-        </LinearLayout>
+        </androidx.appcompat.widget.Toolbar>
 
         <!-- NAV HOST -->
         <fragment
