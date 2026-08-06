@@ -50,7 +50,9 @@ public class MusicService extends Service {
     public static final String ACTION_RELOAD_EQUALIZER = "ACTION_RELOAD_EQUALIZER";
     public static final String ACTION_CLOSE = "ACTION_CLOSE";
     public static final String ACTION_ADD_TO_QUEUE = "ACTION_ADD_TO_QUEUE";
+    public static final String ACTION_ADD_MULTIPLE_TO_QUEUE = "ACTION_ADD_MULTIPLE_TO_QUEUE";
     public static final String ACTION_PLAY_NEXT = "ACTION_PLAY_NEXT";
+    public static final String ACTION_PLAY_NEXT_MULTIPLE = "ACTION_PLAY_NEXT_MULTIPLE";
     
     public static final String BROADCAST_UPDATE_UI = "com.example.parrot.UPDATE_UI";
     public static final String BROADCAST_QUEUE_UPDATED = "com.example.parrot.QUEUE_UPDATED";
@@ -223,6 +225,20 @@ public class MusicService extends Service {
                     String nextPath = intent.getStringExtra("songPath");
                     if (nextPath != null) {
                         queueManager.playNext(nextPath);
+                        broadcastQueueUpdate();
+                    }
+                    break;
+                case ACTION_ADD_MULTIPLE_TO_QUEUE:
+                    ArrayList<String> multiplePaths = intent.getStringArrayListExtra("songPaths");
+                    if (multiplePaths != null && !multiplePaths.isEmpty()) {
+                        queueManager.addAllToQueue(multiplePaths);
+                        broadcastQueueUpdate();
+                    }
+                    break;
+                case ACTION_PLAY_NEXT_MULTIPLE:
+                    ArrayList<String> multipleNextPaths = intent.getStringArrayListExtra("songPaths");
+                    if (multipleNextPaths != null && !multipleNextPaths.isEmpty()) {
+                        queueManager.playNextMultiple(multipleNextPaths);
                         broadcastQueueUpdate();
                     }
                     break;

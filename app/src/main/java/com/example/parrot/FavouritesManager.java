@@ -24,6 +24,12 @@ public class FavouritesManager {
         prefs.edit().putStringSet(KEY_FAVOURITES, favs).apply();
     }
 
+    public void addFavourites(ArrayList<String> songPaths) {
+        Set<String> favs = new HashSet<>(getFavouriteSet());
+        favs.addAll(songPaths);
+        prefs.edit().putStringSet(KEY_FAVOURITES, favs).apply();
+    }
+
     public void removeFavourite(String songPath) {
         Set<String> favs = new HashSet<>(getFavouriteSet());
         favs.remove(songPath);

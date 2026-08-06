@@ -35,6 +35,11 @@ import android.widget.SearchView;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 
+import android.widget.AbsListView;
+import android.view.ActionMode;
+import android.util.SparseBooleanArray;
+import android.app.AlertDialog;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
@@ -90,7 +95,107 @@ public class FavFragment extends Fragment {
         
         // Search views removed from layout, handled via OptionsMenu
         
+        setupMultiSelect();
+        
         return view;
+    }
+
+    private void setupMultiSelect() {
+        favListView.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE_MODAL);
+        favListView.setMultiChoiceModeListener(new AbsListView.MultiChoiceModeListener() {
+            @Override
+            public void onItemCheckedStateChanged(ActionMode mode, int position, long id, boolean checked) {
+                int count = favListView.getCheckedItemCount();
+                mode.setTitle(count + " selected");
+            }
+
+            @Override
+            public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+                mode.getMenuInflater().inflate(R.menu.menu_cab_songs, menu);
+                // "Add to Favourites" action doesn't make sense in FavFragment, maybe rename to Remove?
+                // Let's just leave it as it works toggling it, but it's redundant.
+                return true;
+            }
+
+            @Override
+            public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+                return false;
+            }
+
+            @Override
+            public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+                SparseBooleanArray checked = favListView.getCheckedItemPositions();
+                ArrayList<String> selectedPaths = new ArrayList<>();
+                for (int i = 0; i < checked.size(); i++) {
+                    int pos = checked.keyAt(i);
+                    if (checked.valueAt(i)) {
+                        selectedPaths.add(filteredFavSongs.get(pos));
+                    }
+                }
+
+                int id = item.getItemId();
+                if (id == R.id.action_add_to_queue) {
+                    Intent intent = new Intent(getContext(), MusicService.class);
+                    intent.setAction(MusicService.ACTION_ADD_MULTIPLE_TO_QUEUE);
+                    intent.putStringArrayListExtra("songPaths", selectedPaths);
+                    requireContext().startService(intent);
+                    Toast.makeText(getContext(), selectedPaths.size() + " added to queue", Toast.LENGTH_SHORT).show();
+                    mode.finish();
+                    return true;
+                } else if (id == R.id.action_play_next) {
+                    Intent intent = new Intent(getContext(), MusicService.class);
+                    intent.setAction(MusicService.ACTION_PLAY_NEXT_MULTIPLE);
+                    intent.putStringArrayListExtra("songPaths", selectedPaths);
+                    requireContext().startService(intent);
+                    Toast.makeText(getContext(), selectedPaths.size() + " will play next", Toast.LENGTH_SHORT).show();
+                    mode.finish();
+                    return true;
+                } else if (id == R.id.action_add_to_playlist) {
+                    showAddMultipleToPlaylistDialog(selectedPaths);
+                    mode.finish();
+                    return true;
+                } else if (id == R.id.action_fav) {
+                    // For Favourites tab, maybe remove from favourites instead?
+                    for (String p : selectedPaths) {
+                        favManager.removeFavourite(p);
+                    }
+                    Toast.makeText(getContext(), selectedPaths.size() + " removed from Favourites", Toast.LENGTH_SHORT).show();
+                    loadFavourites();
+                    mode.finish();
+                    return true;
+                } else if (id == R.id.action_delete) {
+                    new AlertDialog.Builder(requireContext())
+                        .setTitle("Delete Songs")
+                        .setMessage("Are you sure you want to delete " + selectedPaths.size() + " songs?")
+                        .setPositiveButton("Yes", (dialog, which) -> {
+                            int deletedCount = 0;
+                            for (String path : selectedPaths) {
+                                File file = new File(path);
+                                if (file.exists() && file.delete()) {
+                                    requireContext().getContentResolver().delete(
+                                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, 
+                                        MediaStore.Audio.Media.DATA + "=?", new String[]{path});
+                                    if (favManager.isFavourite(path)) {
+                                        favManager.removeFavourite(path);
+                                    }
+                                    deletedCount++;
+                                }
+                            }
+                            Toast.makeText(getContext(), deletedCount + " songs deleted", Toast.LENGTH_SHORT).show();
+                            loadFavourites();
+                            mode.finish();
+                        })
+                        .setNegativeButton("No", null)
+                        .show();
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public void onDestroyActionMode(ActionMode mode) {
+            }
+        });
     }
 
     @Override
@@ -326,13 +431,6 @@ public class FavFragment extends Fragment {
             intent.putExtra("pos", actualPosition);
             startActivity(intent);
         });
-
-        favListView.setOnItemLongClickListener((parent, view, position, id) -> {
-            String path = filteredFavSongs.get(position);
-            favManager.removeFavourite(path);
-            loadFavourites();
-            return true;
-        });
     }
 
     private void deleteSong(String path) {
@@ -397,6 +495,25 @@ public class FavFragment extends Fragment {
                 String selectedPlaylist = playlistArray[which];
                 playlistManager.addSongToPlaylist(selectedPlaylist, songPath);
                 Toast.makeText(getContext(), "Added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
+            })
+            .show();
+    }
+
+    private void showAddMultipleToPlaylistDialog(ArrayList<String> songPaths) {
+        PlaylistManager playlistManager = new PlaylistManager(requireContext());
+        ArrayList<String> playlists = playlistManager.getPlaylists();
+        if (playlists.isEmpty()) {
+            Toast.makeText(getContext(), "No playlists available. Create one first.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String[] playlistArray = playlists.toArray(new String[0]);
+        new android.app.AlertDialog.Builder(requireContext())
+            .setTitle("Add to Playlist")
+            .setItems(playlistArray, (dialog, which) -> {
+                String selectedPlaylist = playlistArray[which];
+                playlistManager.addSongsToPlaylist(selectedPlaylist, songPaths);
+                Toast.makeText(getContext(), songPaths.size() + " songs added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
             })
             .show();
     }

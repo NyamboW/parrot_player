@@ -46,6 +46,20 @@ public class PlaylistManager {
         }
     }
 
+    public void addSongsToPlaylist(String playlistName, ArrayList<String> songPaths) {
+        ArrayList<String> songs = getSongsInPlaylist(playlistName);
+        boolean changed = false;
+        for (String songPath : songPaths) {
+            if (!songs.contains(songPath)) {
+                songs.add(songPath);
+                changed = true;
+            }
+        }
+        if (changed) {
+            saveSongsToPlaylist(playlistName, songs);
+        }
+    }
+
     public void removeSongFromPlaylist(String playlistName, String songPath) {
         ArrayList<String> songs = getSongsInPlaylist(playlistName);
         if (songs.contains(songPath)) {

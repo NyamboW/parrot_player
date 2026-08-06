@@ -15,10 +15,24 @@ public class QueueManager {
     }
 
     /**
+     * Add multiple songs to the end of the queue.
+     */
+    public void addAllToQueue(ArrayList<String> songPaths) {
+        queue.addAll(songPaths);
+    }
+
+    /**
      * Insert a song at the front of the queue ("Play Next").
      */
     public void playNext(String songPath) {
         queue.add(0, songPath);
+    }
+
+    /**
+     * Insert multiple songs at the front of the queue.
+     */
+    public void playNextMultiple(ArrayList<String> songPaths) {
+        queue.addAll(0, songPaths);
     }
 
     /**
