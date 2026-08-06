@@ -461,6 +461,9 @@ public class FavFragment extends Fragment {
         if (searchItem != null) {
             SearchView searchView = (SearchView) searchItem.getActionView();
             if (searchView != null) {
+                searchView.setIconifiedByDefault(false);
+                searchView.setFocusable(true);
+                searchView.requestFocusFromTouch();
                 searchView.setQueryHint("Search favourites...");
                 searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
                     @Override
