@@ -5,8 +5,6 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Binder;
@@ -53,26 +51,26 @@ public class MusicService extends Service {
     public static final String ACTION_ADD_MULTIPLE_TO_QUEUE = "ACTION_ADD_MULTIPLE_TO_QUEUE";
     public static final String ACTION_PLAY_NEXT = "ACTION_PLAY_NEXT";
     public static final String ACTION_PLAY_NEXT_MULTIPLE = "ACTION_PLAY_NEXT_MULTIPLE";
-    
+
     public static final String BROADCAST_UPDATE_UI = "com.example.parrot.UPDATE_UI";
     public static final String BROADCAST_QUEUE_UPDATED = "com.example.parrot.QUEUE_UPDATED";
 
     private final IBinder binder = new MyBinder();
-    
+
     private MediaPlayer mediaPlayer;
     private ArrayList<String> mySongs = new ArrayList<>();
     private int position = 0;
     private boolean isShuffle = false;
     private boolean isRepeat = false;
-    
+
     private QueueManager queueManager = new QueueManager();
-    
+
     private Equalizer mEqualizer;
     private BassBoost mBassBoost;
     private PresetReverb mPresetReverb;
 
     private MediaSessionCompat mediaSession;
-    
+
     private AudioManager audioManager;
     private AudioFocusRequestCompat audioFocusRequest;
     private AudioManager.OnAudioFocusChangeListener audioFocusChangeListener;
@@ -80,13 +78,14 @@ public class MusicService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        
+
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         audioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
             @Override
             public void onAudioFocusChange(int focusChange) {
-                if (mediaPlayer == null) return;
-                
+                if (mediaPlayer == null)
+                    return;
+
                 switch (focusChange) {
                     case AudioManager.AUDIOFOCUS_GAIN:
                         if (!mediaPlayer.isPlaying()) {
@@ -121,11 +120,11 @@ public class MusicService extends Service {
                 }
             }
         };
-        
+
         audioFocusRequest = new AudioFocusRequestCompat.Builder(AudioManagerCompat.AUDIOFOCUS_GAIN)
                 .setOnAudioFocusChangeListener(audioFocusChangeListener)
                 .build();
-                
+
         mediaSession = new MediaSessionCompat(this, "MusicService");
         mediaSession.setCallback(new MediaSessionCompat.Callback() {
             @Override
@@ -159,7 +158,7 @@ public class MusicService extends Service {
                     updateMediaSession();
                 }
             }
-            
+
             @Override
             public void onCustomAction(String action, Bundle extras) {
                 if (ACTION_CLOSE.equals(action)) {
@@ -246,7 +245,7 @@ public class MusicService extends Service {
                     safeRelease();
                     stopForeground(true);
                     stopSelf();
-                    
+
                     // Exit the app completely
                     Intent closeIntent = new Intent("com.example.parrot.CLOSE_APP");
                     sendBroadcast(closeIntent);
@@ -257,15 +256,19 @@ public class MusicService extends Service {
     }
 
     public void playSong(int pos) {
-        safeRelease();
         position = pos;
+        if (mySongs.isEmpty() || position < 0 || position >= mySongs.size())
+            return;
+        startPlayback(mySongs.get(position));
+    }
 
-        if (mySongs.isEmpty()) return;
+    private void startPlayback(String songPath) {
+        safeRelease();
 
-        Uri uri = Uri.parse(mySongs.get(position));
+        Uri uri = Uri.parse(songPath);
         mediaPlayer = MediaPlayer.create(this, uri);
-
-        if (mediaPlayer == null) return;
+        if (mediaPlayer == null)
+            return;
 
         setupEqualizer();
 
@@ -275,20 +278,20 @@ public class MusicService extends Service {
             updateMediaSession();
             showNotification(R.drawable.ic_pause);
             broadcastUIUpdate();
+            ensureAlbumArtLoaded(songPath);
         }
 
         mediaPlayer.setOnCompletionListener(mp -> {
             if (isRepeat) {
                 playSong(position);
             } else if (!queueManager.isEmpty()) {
-                // Play next song from queue
                 playNextFromQueue();
             } else {
                 nextSong();
             }
         });
     }
-    
+
     /**
      * Play the next song from the queue.
      */
@@ -297,40 +300,16 @@ public class MusicService extends Service {
         if (nextPath != null) {
             // Insert it into the current playlist position context so prev/next still work
             int insertIndex = position + 1;
-            if (insertIndex > mySongs.size()) insertIndex = mySongs.size();
+            if (insertIndex > mySongs.size())
+                insertIndex = mySongs.size();
             mySongs.add(insertIndex, nextPath);
             position = insertIndex;
-            
-            safeRelease();
-            
-            Uri uri = Uri.parse(nextPath);
-            mediaPlayer = MediaPlayer.create(this, uri);
-            if (mediaPlayer == null) return;
-            
-            setupEqualizer();
-            
-            int result = AudioManagerCompat.requestAudioFocus(audioManager, audioFocusRequest);
-            if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-                mediaPlayer.start();
-                updateMediaSession();
-                showNotification(R.drawable.ic_pause);
-                broadcastUIUpdate();
-            }
-            
-            mediaPlayer.setOnCompletionListener(mp -> {
-                if (isRepeat) {
-                    playSong(position);
-                } else if (!queueManager.isEmpty()) {
-                    playNextFromQueue();
-                } else {
-                    nextSong();
-                }
-            });
-            
+
+            startPlayback(nextPath);
             broadcastQueueUpdate();
         }
     }
-    
+
     /**
      * Play a specific song from the queue by index (tap in queue viewer).
      */
@@ -339,45 +318,22 @@ public class MusicService extends Service {
         if (queueIndex >= 0 && queueIndex < queue.size()) {
             String path = queue.get(queueIndex);
             queueManager.removeFromQueue(queueIndex);
-            
+
             // Insert and play
             int insertIndex = position + 1;
-            if (insertIndex > mySongs.size()) insertIndex = mySongs.size();
+            if (insertIndex > mySongs.size())
+                insertIndex = mySongs.size();
             mySongs.add(insertIndex, path);
             position = insertIndex;
-            
-            safeRelease();
-            
-            Uri uri = Uri.parse(path);
-            mediaPlayer = MediaPlayer.create(this, uri);
-            if (mediaPlayer == null) return;
-            
-            setupEqualizer();
-            
-            int result = AudioManagerCompat.requestAudioFocus(audioManager, audioFocusRequest);
-            if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-                mediaPlayer.start();
-                updateMediaSession();
-                showNotification(R.drawable.ic_pause);
-                broadcastUIUpdate();
-            }
-            
-            mediaPlayer.setOnCompletionListener(mp -> {
-                if (isRepeat) {
-                    playSong(position);
-                } else if (!queueManager.isEmpty()) {
-                    playNextFromQueue();
-                } else {
-                    nextSong();
-                }
-            });
-            
+
+            startPlayback(path);
             broadcastQueueUpdate();
         }
     }
 
     public void togglePlay() {
-        if (mediaPlayer == null) return;
+        if (mediaPlayer == null)
+            return;
 
         if (mediaPlayer.isPlaying()) {
             mediaPlayer.pause();
@@ -395,7 +351,8 @@ public class MusicService extends Service {
     }
 
     public void nextSong() {
-        if (mySongs.isEmpty()) return;
+        if (mySongs.isEmpty())
+            return;
 
         // Check queue first
         if (!queueManager.isEmpty()) {
@@ -412,7 +369,8 @@ public class MusicService extends Service {
     }
 
     public void prevSong() {
-        if (mySongs.isEmpty()) return;
+        if (mySongs.isEmpty())
+            return;
 
         if (isShuffle) {
             position = new Random().nextInt(mySongs.size());
@@ -434,27 +392,33 @@ public class MusicService extends Service {
     }
 
     private void showNotification(int playPauseBtn) {
-        if (mySongs.isEmpty()) return;
-        
+        if (mySongs.isEmpty())
+            return;
+
         String songPath = mySongs.get(position);
         String songName = getFileName(songPath);
 
         Intent prevIntent = new Intent(this, MusicService.class).setAction(ACTION_PREV);
-        PendingIntent prevPendingIntent = PendingIntent.getService(this, 0, prevIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent prevPendingIntent = PendingIntent.getService(this, 0, prevIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent playIntent = new Intent(this, MusicService.class).setAction(ACTION_PLAY_PAUSE);
-        PendingIntent playPendingIntent = PendingIntent.getService(this, 0, playIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent playPendingIntent = PendingIntent.getService(this, 0, playIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent nextIntent = new Intent(this, MusicService.class).setAction(ACTION_NEXT);
-        PendingIntent nextPendingIntent = PendingIntent.getService(this, 0, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent nextPendingIntent = PendingIntent.getService(this, 0, nextIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent closeIntent = new Intent(this, MusicService.class).setAction(ACTION_CLOSE);
-        PendingIntent closePendingIntent = PendingIntent.getService(this, 0, closeIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent closePendingIntent = PendingIntent.getService(this, 0, closeIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent intent = new Intent(this, PlayerActivity.class);
-        PendingIntent contentIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent contentIntent = PendingIntent.getActivity(this, 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        Bitmap icon = getAlbumArt(songPath);
+        Bitmap icon = AlbumArtLoader.getInstance().getBestCachedArt(songPath);
 
         Notification notification = new NotificationCompat.Builder(this, ApplicationClass.CHANNEL_ID_1)
                 .setSmallIcon(R.drawable.ic_music)
@@ -476,10 +440,11 @@ public class MusicService extends Service {
 
         startForeground(1, notification);
     }
-    
+
     private void broadcastUIUpdate() {
-        if (mediaPlayer == null || mySongs.isEmpty()) return;
-        
+        if (mediaPlayer == null || mySongs.isEmpty())
+            return;
+
         Intent intent = new Intent(BROADCAST_UPDATE_UI);
         intent.setPackage(getPackageName()); // CRITICAL for Android 14 RECEIVER_NOT_EXPORTED
         intent.putExtra("song", getFileName(mySongs.get(position)));
@@ -487,86 +452,129 @@ public class MusicService extends Service {
         intent.putExtra("isPlaying", mediaPlayer.isPlaying());
         intent.putExtra("duration", mediaPlayer.getDuration());
         sendBroadcast(intent);
-        
+
         AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(this);
         ComponentName widgetComponent = new ComponentName(this, PlayerWidgetProvider.class);
         int[] widgetIds = appWidgetManager.getAppWidgetIds(widgetComponent);
         if (widgetIds != null && widgetIds.length > 0) {
             RemoteViews views = PlayerWidgetProvider.getWidgetViews(this);
-            views.setTextViewText(R.id.widgetSongName, getFileName(mySongs.get(position)));
+            String songPath = mySongs.get(position);
+            views.setTextViewText(R.id.widgetSongName, getFileName(songPath));
             if (mediaPlayer.isPlaying()) {
                 views.setImageViewResource(R.id.widgetPlayPause, R.drawable.ic_pause);
             } else {
                 views.setImageViewResource(R.id.widgetPlayPause, R.drawable.ic_play);
             }
-            
-            // Set rounded album art
-            Bitmap albumArt = getAlbumArt(mySongs.get(position));
+
+            // Set rounded album art from cache (avoid blocking main thread)
+            Bitmap albumArt = AlbumArtLoader.getInstance().getBestCachedArt(songPath);
             if (albumArt != null) {
                 // Scale bitmap for widget to avoid memory issues and apply rounding
                 Bitmap scaled = Bitmap.createScaledBitmap(albumArt, 100, 100, true);
                 Bitmap rounded = getRoundedCornerBitmap(scaled, 16);
                 views.setImageViewBitmap(R.id.widgetAlbumArt, rounded);
+            } else {
+                views.setImageViewResource(R.id.widgetAlbumArt, R.drawable.ic_music);
             }
-            
+
             appWidgetManager.updateAppWidget(widgetIds, views);
         }
     }
-    
+
     private void broadcastQueueUpdate() {
         Intent intent = new Intent(BROADCAST_QUEUE_UPDATED);
         intent.setPackage(getPackageName());
         sendBroadcast(intent);
     }
-    
+
     private void updateMediaSession() {
-        if (mediaPlayer == null) return;
-        
+        if (mediaPlayer == null || mySongs.isEmpty() || position < 0 || position >= mySongs.size())
+            return;
+
         long currentPosition = mediaPlayer.getCurrentPosition();
         int state = mediaPlayer.isPlaying() ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED;
-        
+
         PlaybackStateCompat.CustomAction closeAction = new PlaybackStateCompat.CustomAction.Builder(
                 ACTION_CLOSE,
                 "Close",
-                R.drawable.ic_close
-        ).build();
-        
+                R.drawable.ic_close).build();
+
         mediaSession.setPlaybackState(new PlaybackStateCompat.Builder()
                 .setActions(PlaybackStateCompat.ACTION_PLAY |
-                            PlaybackStateCompat.ACTION_PAUSE |
-                            PlaybackStateCompat.ACTION_SKIP_TO_NEXT |
-                            PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS |
-                            PlaybackStateCompat.ACTION_SEEK_TO)
+                        PlaybackStateCompat.ACTION_PAUSE |
+                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT |
+                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS |
+                        PlaybackStateCompat.ACTION_SEEK_TO)
                 .addCustomAction(closeAction)
                 .setState(state, currentPosition, 1.0f)
                 .build());
-                
+
         String songPath = mySongs.get(this.position);
         String songName = getFileName(songPath);
-        Bitmap icon = getAlbumArt(songPath);
-        
-        mediaSession.setMetadata(new MediaMetadataCompat.Builder()
+        Bitmap icon = AlbumArtLoader.getInstance().getBestCachedArt(songPath);
+
+        MediaMetadataCompat.Builder metadataBuilder = new MediaMetadataCompat.Builder()
                 .putString(MediaMetadataCompat.METADATA_KEY_TITLE, songName)
-                .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, icon)
-                .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, mediaPlayer.getDuration())
-                .build());
+                .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, mediaPlayer.getDuration());
+        if (icon != null) {
+            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, icon);
+        }
+        mediaSession.setMetadata(metadataBuilder.build());
     }
 
-    private Bitmap getAlbumArt(String path) {
-        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-        try {
-            retriever.setDataSource(path);
-            byte[] art = retriever.getEmbeddedPicture();
-            retriever.release();
-            if (art != null) {
-                return BitmapFactory.decodeByteArray(art, 0, art.length);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+    private void ensureAlbumArtLoaded(String songPath) {
+        AlbumArtLoader loader = AlbumArtLoader.getInstance();
+        if (loader.getCachedFull(songPath) != null || loader.hasNoArt(songPath)) {
+            preloadNextSongArt();
+            return;
         }
-        return BitmapFactory.decodeResource(getResources(), R.drawable.ic_music);
+
+        loader.loadFullArt(songPath, bitmap -> {
+            if (mediaPlayer != null && songPath.equals(getCurrentSongPath())) {
+                if (bitmap != null) {
+                    updateMediaSession();
+                    showNotification(mediaPlayer.isPlaying() ? R.drawable.ic_pause : R.drawable.ic_play);
+                    updateWidgetAlbumArt(songPath, bitmap);
+                }
+            }
+            preloadNextSongArt();
+        });
     }
-    
+
+    private void updateWidgetAlbumArt(String songPath, Bitmap albumArt) {
+        AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(this);
+        ComponentName widgetComponent = new ComponentName(this, PlayerWidgetProvider.class);
+        int[] widgetIds = appWidgetManager.getAppWidgetIds(widgetComponent);
+        if (widgetIds != null && widgetIds.length > 0 && albumArt != null && mediaPlayer != null) {
+            RemoteViews views = PlayerWidgetProvider.getWidgetViews(this);
+            views.setTextViewText(R.id.widgetSongName, getFileName(songPath));
+            views.setImageViewResource(R.id.widgetPlayPause,
+                    mediaPlayer.isPlaying() ? R.drawable.ic_pause : R.drawable.ic_play);
+            Bitmap scaled = Bitmap.createScaledBitmap(albumArt, 100, 100, true);
+            Bitmap rounded = getRoundedCornerBitmap(scaled, 16);
+            views.setImageViewBitmap(R.id.widgetAlbumArt, rounded);
+            appWidgetManager.updateAppWidget(widgetIds, views);
+        }
+    }
+
+    private void preloadNextSongArt() {
+        if (mySongs == null || mySongs.isEmpty())
+            return;
+        String nextPath = null;
+        if (!queueManager.isEmpty()) {
+            ArrayList<String> q = queueManager.getQueue();
+            if (!q.isEmpty()) {
+                nextPath = q.get(0);
+            }
+        } else if (!isShuffle && mySongs.size() > 1) {
+            int nextIndex = (position + 1) % mySongs.size();
+            nextPath = mySongs.get(nextIndex);
+        }
+        if (nextPath != null) {
+            AlbumArtLoader.getInstance().preloadFullArt(nextPath);
+        }
+    }
+
     private Bitmap getRoundedCornerBitmap(Bitmap bitmap, int pixels) {
         Bitmap output = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(output);
@@ -603,54 +611,54 @@ public class MusicService extends Service {
         }
         return null;
     }
-    
+
     public MediaPlayer getMediaPlayer() {
         return mediaPlayer;
     }
-    
+
     public int getAudioSessionId() {
         if (mediaPlayer != null) {
             return mediaPlayer.getAudioSessionId();
         }
         return 0;
     }
-    
+
     public void seekTo(int pos) {
         if (mediaPlayer != null) {
             mediaPlayer.seekTo(pos);
             updateMediaSession();
         }
     }
-    
+
     public void setShuffle(boolean shuffle) {
         isShuffle = shuffle;
     }
-    
+
     public void setRepeat(boolean repeat) {
         isRepeat = repeat;
     }
-    
+
     // Queue accessors
-    
+
     public ArrayList<String> getQueueList() {
         return queueManager.getQueue();
     }
-    
+
     public void addToQueue(String songPath) {
         queueManager.addToQueue(songPath);
         broadcastQueueUpdate();
     }
-    
+
     public void addPlayNext(String songPath) {
         queueManager.playNext(songPath);
         broadcastQueueUpdate();
     }
-    
+
     public void removeFromQueue(int index) {
         queueManager.removeFromQueue(index);
         broadcastQueueUpdate();
     }
-    
+
     public void clearQueue() {
         queueManager.clearQueue();
         broadcastQueueUpdate();
@@ -664,15 +672,19 @@ public class MusicService extends Service {
             mediaSession.release();
         }
     }
-    
+
     private void setupEqualizer() {
-        if (mediaPlayer == null) return;
+        if (mediaPlayer == null)
+            return;
         int sessionId = mediaPlayer.getAudioSessionId();
-        
-        if (mEqualizer != null) mEqualizer.release();
-        if (mBassBoost != null) mBassBoost.release();
-        if (mPresetReverb != null) mPresetReverb.release();
-        
+
+        if (mEqualizer != null)
+            mEqualizer.release();
+        if (mBassBoost != null)
+            mBassBoost.release();
+        if (mPresetReverb != null)
+            mPresetReverb.release();
+
         try {
             mEqualizer = new Equalizer(0, sessionId);
             mBassBoost = new BassBoost(0, sessionId);
@@ -682,28 +694,29 @@ public class MusicService extends Service {
             e.printStackTrace();
         }
     }
-    
+
     private void loadEqualizerSettings() {
-        if (mEqualizer == null || mBassBoost == null || mPresetReverb == null) return;
+        if (mEqualizer == null || mBassBoost == null || mPresetReverb == null)
+            return;
         SharedPreferences prefs = getSharedPreferences("parrot_eq", Context.MODE_PRIVATE);
         boolean isEqEnabled = prefs.getBoolean("isEqualizerEnabled", true);
-        
+
         try {
             mEqualizer.setEnabled(isEqEnabled);
             mBassBoost.setEnabled(isEqEnabled);
             mPresetReverb.setEnabled(isEqEnabled);
-            
+
             if (isEqEnabled) {
                 int bassStrength = prefs.getInt("bassStrength", -1);
                 if (bassStrength != -1 && mBassBoost.getStrengthSupported()) {
                     mBassBoost.setStrength((short) bassStrength);
                 }
-                
+
                 int reverbPreset = prefs.getInt("reverbPreset", -1);
                 if (reverbPreset != -1) {
                     mPresetReverb.setPreset((short) reverbPreset);
                 }
-                
+
                 short numBands = mEqualizer.getNumberOfBands();
                 for (short i = 0; i < numBands; i++) {
                     int level = prefs.getInt("band" + i, mEqualizer.getBandLevel(i));

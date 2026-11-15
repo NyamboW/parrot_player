@@ -2,13 +2,11 @@ package com.example.parrot;
 
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.media.MediaMetadataRetriever;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.util.LruCache;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -55,15 +53,14 @@ public class FavFragment extends Fragment {
     private BaseAdapter adapter;
 
     private ExecutorService executorService;
-    private LruCache<String, Bitmap> memoryCache;
     private HashMap<String, String> artistCache = new HashMap<>();
 
     private int currentFavSortMode = 0; // 0: Date, 1: A-Z, 2: Folder
-    
+
     // Search
     private ArrayList<String> filteredFavSongs = new ArrayList<>();
     private String[] filteredDisplayNames;
-    
+
     // Maintain current search query to apply when loading songs
     private String currentQuery = "";
 
@@ -72,31 +69,21 @@ public class FavFragment extends Fragment {
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
         favManager = new FavouritesManager(requireContext());
-        executorService = Executors.newFixedThreadPool(4);
-
-        final int maxMemory = (int) (Runtime.getRuntime().maxMemory() / 1024);
-        final int cacheSize = maxMemory / 8;
-
-        memoryCache = new LruCache<String, Bitmap>(cacheSize) {
-            @Override
-            protected int sizeOf(String key, Bitmap bitmap) {
-                return bitmap.getByteCount() / 1024;
-            }
-        };
+        executorService = Executors.newFixedThreadPool(2);
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+            Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_fav, container, false);
 
         favListView = view.findViewById(R.id.favListView);
         txtEmpty = view.findViewById(R.id.txtEmpty);
-        
+
         // Search views removed from layout, handled via OptionsMenu
-        
+
         setupMultiSelect();
-        
+
         return view;
     }
 
@@ -112,7 +99,8 @@ public class FavFragment extends Fragment {
             @Override
             public boolean onCreateActionMode(ActionMode mode, Menu menu) {
                 mode.getMenuInflater().inflate(R.menu.menu_cab_songs, menu);
-                // "Add to Favourites" action doesn't make sense in FavFragment, maybe rename to Remove?
+                // "Add to Favourites" action doesn't make sense in FavFragment, maybe rename to
+                // Remove?
                 // Let's just leave it as it works toggling it, but it's redundant.
                 return true;
             }
@@ -159,34 +147,36 @@ public class FavFragment extends Fragment {
                     for (String p : selectedPaths) {
                         favManager.removeFavourite(p);
                     }
-                    Toast.makeText(getContext(), selectedPaths.size() + " removed from Favourites", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), selectedPaths.size() + " removed from Favourites", Toast.LENGTH_SHORT)
+                            .show();
                     loadFavourites();
                     mode.finish();
                     return true;
                 } else if (id == R.id.action_delete) {
                     new AlertDialog.Builder(requireContext())
-                        .setTitle("Delete Songs")
-                        .setMessage("Are you sure you want to delete " + selectedPaths.size() + " songs?")
-                        .setPositiveButton("Yes", (dialog, which) -> {
-                            int deletedCount = 0;
-                            for (String path : selectedPaths) {
-                                File file = new File(path);
-                                if (file.exists() && file.delete()) {
-                                    requireContext().getContentResolver().delete(
-                                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, 
-                                        MediaStore.Audio.Media.DATA + "=?", new String[]{path});
-                                    if (favManager.isFavourite(path)) {
-                                        favManager.removeFavourite(path);
+                            .setTitle("Delete Songs")
+                            .setMessage("Are you sure you want to delete " + selectedPaths.size() + " songs?")
+                            .setPositiveButton("Yes", (dialog, which) -> {
+                                int deletedCount = 0;
+                                for (String path : selectedPaths) {
+                                    File file = new File(path);
+                                    if (file.exists() && file.delete()) {
+                                        requireContext().getContentResolver().delete(
+                                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                                MediaStore.Audio.Media.DATA + "=?", new String[] { path });
+                                        if (favManager.isFavourite(path)) {
+                                            favManager.removeFavourite(path);
+                                        }
+                                        deletedCount++;
                                     }
-                                    deletedCount++;
                                 }
-                            }
-                            Toast.makeText(getContext(), deletedCount + " songs deleted", Toast.LENGTH_SHORT).show();
-                            loadFavourites();
-                            mode.finish();
-                        })
-                        .setNegativeButton("No", null)
-                        .show();
+                                Toast.makeText(getContext(), deletedCount + " songs deleted", Toast.LENGTH_SHORT)
+                                        .show();
+                                loadFavourites();
+                                mode.finish();
+                            })
+                            .setNegativeButton("No", null)
+                            .show();
                     return true;
                 }
                 return false;
@@ -215,7 +205,7 @@ public class FavFragment extends Fragment {
                 favSongs.add(path);
             }
         }
-        
+
         Collections.sort(favSongs, new Comparator<String>() {
             @Override
             public int compare(String path1, String path2) {
@@ -248,7 +238,7 @@ public class FavFragment extends Fragment {
             String name = fullPath.substring(fullPath.lastIndexOf("/") + 1);
             displayNames[i] = name.replace(".mp3", "").replace(".wav", "").replace(".m4a", "").replace(".flac", "");
         }
-        
+
         // Apply current search filter
         if (currentQuery.isEmpty()) {
             filteredFavSongs = new ArrayList<>(favSongs);
@@ -260,20 +250,22 @@ public class FavFragment extends Fragment {
 
         setFavAdapter();
     }
-    
+
     private void filterFavSongs(String query) {
         filteredFavSongs.clear();
         ArrayList<String> tempNames = new ArrayList<>();
-        
+
         if (query.isEmpty()) {
             filteredFavSongs.addAll(favSongs);
             if (displayNames != null) {
-                for (String name : displayNames) tempNames.add(name);
+                for (String name : displayNames)
+                    tempNames.add(name);
             }
         } else {
             String lowerQuery = query.toLowerCase();
             for (int i = 0; i < favSongs.size(); i++) {
-                if (displayNames == null || i >= displayNames.length) break;
+                if (displayNames == null || i >= displayNames.length)
+                    break;
                 boolean matchName = displayNames[i].toLowerCase().contains(lowerQuery);
                 String artist = artistCache.get(favSongs.get(i));
                 boolean matchArtist = artist != null && artist.toLowerCase().contains(lowerQuery);
@@ -283,9 +275,9 @@ public class FavFragment extends Fragment {
                 }
             }
         }
-        
+
         filteredDisplayNames = tempNames.toArray(new String[0]);
-        
+
         if (filteredFavSongs.isEmpty() && !query.isEmpty()) {
             txtEmpty.setVisibility(View.VISIBLE);
             txtEmpty.setText("No results found");
@@ -300,7 +292,7 @@ public class FavFragment extends Fragment {
             setFavAdapter();
         }
     }
-    
+
     private void setFavAdapter() {
         adapter = new BaseAdapter() {
             @Override
@@ -330,18 +322,19 @@ public class FavFragment extends Fragment {
 
                 String path = filteredFavSongs.get(i);
                 img.setTag(path);
-                
+
                 if (artistCache.containsKey(path)) {
-                    if (txtArtist != null) txtArtist.setText(artistCache.get(path));
+                    if (txtArtist != null)
+                        txtArtist.setText(artistCache.get(path));
                 }
-                
+
                 if (btnMore != null) {
                     btnMore.setOnClickListener(view1 -> {
                         PopupMenu popupMenu = new PopupMenu(getContext(), view1);
                         popupMenu.getMenuInflater().inflate(R.menu.song_menu, popupMenu.getMenu());
-                        
+
                         popupMenu.getMenu().findItem(R.id.action_fav).setTitle("Remove from Favourites");
-                        
+
                         popupMenu.setOnMenuItemClickListener(item -> {
                             if (item.getItemId() == R.id.action_fav) {
                                 favManager.removeFavourite(path);
@@ -374,40 +367,45 @@ public class FavFragment extends Fragment {
                     });
                 }
 
-                Bitmap cachedBitmap = memoryCache.get(path);
+                AlbumArtLoader loader = AlbumArtLoader.getInstance();
+                Bitmap cachedBitmap = loader.getCachedThumb(path);
                 if (cachedBitmap != null) {
                     img.setImageBitmap(cachedBitmap);
                 } else {
                     img.setImageResource(R.drawable.ic_music);
+                    if (!loader.hasNoArt(path)) {
+                        loader.loadThumbArt(path, bitmap -> {
+                            if (bitmap != null && isAdded() && path.equals(img.getTag())) {
+                                img.setImageBitmap(bitmap);
+                            }
+                        });
+                    }
+                }
+
+                if (!artistCache.containsKey(path)) {
                     executorService.execute(() -> {
-                        Bitmap bitmap = null;
                         String artist = "Unknown Artist";
                         MediaMetadataRetriever retriever = new MediaMetadataRetriever();
                         try {
                             retriever.setDataSource(path);
-                            artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST);
-                            if (artist == null) artist = "Unknown Artist";
-                            
-                            byte[] art = retriever.getEmbeddedPicture();
-                            retriever.release();
-                            if (art != null) {
-                                bitmap = BitmapFactory.decodeByteArray(art, 0, art.length);
+                            String extracted = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST);
+                            if (extracted != null && !extracted.isEmpty()) {
+                                artist = extracted;
                             }
-                        } catch (Exception ignored) {}
+                        } catch (Exception ignored) {
+                        } finally {
+                            try {
+                                retriever.release();
+                            } catch (Exception ignored) {
+                            }
+                        }
 
-                        final Bitmap finalBitmap = bitmap;
                         final String finalArtist = artist;
                         if (getActivity() != null) {
                             getActivity().runOnUiThread(() -> {
                                 artistCache.put(path, finalArtist);
-                                if (path.equals(img.getTag())) {
-                                    if (finalBitmap != null) {
-                                        memoryCache.put(path, finalBitmap);
-                                        img.setImageBitmap(finalBitmap);
-                                    }
-                                    if (txtArtist != null) {
-                                        txtArtist.setText(finalArtist);
-                                    }
+                                if (path.equals(img.getTag()) && txtArtist != null) {
+                                    txtArtist.setText(finalArtist);
                                 }
                             });
                         }
@@ -424,8 +422,10 @@ public class FavFragment extends Fragment {
             // Use filtered list for playback but pass correct position
             String tappedPath = filteredFavSongs.get(position);
             int actualPosition = favSongs.indexOf(tappedPath);
-            if (actualPosition == -1) actualPosition = position;
-            
+            if (actualPosition == -1)
+                actualPosition = position;
+
+            AlbumArtLoader.getInstance().preloadFullArt(tappedPath);
             Intent intent = new Intent(getContext(), PlayerActivity.class);
             intent.putStringArrayListExtra("songs", favSongs);
             intent.putExtra("pos", actualPosition);
@@ -437,14 +437,14 @@ public class FavFragment extends Fragment {
         File file = new File(path);
         try {
             if (file.exists() && file.delete()) {
-                requireContext().getContentResolver().delete(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, 
-                    MediaStore.Audio.Media.DATA + "=?", new String[]{path});
+                requireContext().getContentResolver().delete(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                        MediaStore.Audio.Media.DATA + "=?", new String[] { path });
                 Toast.makeText(getContext(), "Deleted", Toast.LENGTH_SHORT).show();
-                
+
                 if (favManager.isFavourite(path)) {
                     favManager.removeFavourite(path);
                 }
-                
+
                 loadFavourites();
             } else {
                 Toast.makeText(getContext(), "Failed to delete. May require permission.", Toast.LENGTH_SHORT).show();
@@ -490,16 +490,16 @@ public class FavFragment extends Fragment {
             Toast.makeText(getContext(), "No playlists available. Create one first.", Toast.LENGTH_SHORT).show();
             return;
         }
-        
+
         String[] playlistArray = playlists.toArray(new String[0]);
         new android.app.AlertDialog.Builder(requireContext())
-            .setTitle("Add to Playlist")
-            .setItems(playlistArray, (dialog, which) -> {
-                String selectedPlaylist = playlistArray[which];
-                playlistManager.addSongToPlaylist(selectedPlaylist, songPath);
-                Toast.makeText(getContext(), "Added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
-            })
-            .show();
+                .setTitle("Add to Playlist")
+                .setItems(playlistArray, (dialog, which) -> {
+                    String selectedPlaylist = playlistArray[which];
+                    playlistManager.addSongToPlaylist(selectedPlaylist, songPath);
+                    Toast.makeText(getContext(), "Added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
+                })
+                .show();
     }
 
     private void showAddMultipleToPlaylistDialog(ArrayList<String> songPaths) {
@@ -509,15 +509,16 @@ public class FavFragment extends Fragment {
             Toast.makeText(getContext(), "No playlists available. Create one first.", Toast.LENGTH_SHORT).show();
             return;
         }
-        
+
         String[] playlistArray = playlists.toArray(new String[0]);
         new android.app.AlertDialog.Builder(requireContext())
-            .setTitle("Add to Playlist")
-            .setItems(playlistArray, (dialog, which) -> {
-                String selectedPlaylist = playlistArray[which];
-                playlistManager.addSongsToPlaylist(selectedPlaylist, songPaths);
-                Toast.makeText(getContext(), songPaths.size() + " songs added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
-            })
-            .show();
+                .setTitle("Add to Playlist")
+                .setItems(playlistArray, (dialog, which) -> {
+                    String selectedPlaylist = playlistArray[which];
+                    playlistManager.addSongsToPlaylist(selectedPlaylist, songPaths);
+                    Toast.makeText(getContext(), songPaths.size() + " songs added to " + selectedPlaylist,
+                            Toast.LENGTH_SHORT).show();
+                })
+                .show();
     }
 }
