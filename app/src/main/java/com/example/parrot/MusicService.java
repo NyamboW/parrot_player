@@ -208,6 +208,10 @@ public class MusicService extends Service {
                     break;
                 case ACTION_REQUEST_UPDATE:
                     broadcastUIUpdate();
+                    String currentPath = getCurrentSongPath();
+                    if (currentPath != null) {
+                        ensureAlbumArtLoaded(currentPath);
+                    }
                     break;
                 case ACTION_RELOAD_EQUALIZER:
                     loadEqualizerSettings();
