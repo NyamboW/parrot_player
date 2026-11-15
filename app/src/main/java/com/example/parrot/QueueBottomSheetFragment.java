@@ -53,7 +53,7 @@ public class QueueBottomSheetFragment extends BottomSheetDialogFragment {
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
-            Bundle savedInstanceState) {
+                             Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_queue_bottom_sheet, container, false);
 
         queueListView = view.findViewById(R.id.queueListView);
@@ -77,8 +77,7 @@ public class QueueBottomSheetFragment extends BottomSheetDialogFragment {
     }
 
     private void refreshQueue() {
-        if (!isBound || musicService == null)
-            return;
+        if (!isBound || musicService == null) return;
 
         ArrayList<String> queue = musicService.getQueueList();
 
@@ -98,7 +97,7 @@ public class QueueBottomSheetFragment extends BottomSheetDialogFragment {
             String fullPath = queue.get(i);
             String name = fullPath.substring(fullPath.lastIndexOf("/") + 1);
             displayNames[i] = name.replace(".mp3", "").replace(".wav", "")
-                    .replace(".m4a", "").replace(".flac", "");
+                                  .replace(".m4a", "").replace(".flac", "");
         }
 
         queueListView.setAdapter(new BaseAdapter() {

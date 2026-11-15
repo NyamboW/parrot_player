@@ -57,7 +57,7 @@ public class GroupSongsActivity extends AppCompatActivity {
         if (getSupportActionBar() != null && name != null) {
             getSupportActionBar().setTitle(name);
         }
-
+        
         toolbar.setNavigationOnClickListener(v -> onBackPressed());
 
         setupMultiSelect();
@@ -102,8 +102,7 @@ public class GroupSongsActivity extends AppCompatActivity {
                     intent.setAction(MusicService.ACTION_ADD_MULTIPLE_TO_QUEUE);
                     intent.putStringArrayListExtra("songPaths", selectedPaths);
                     startService(intent);
-                    Toast.makeText(GroupSongsActivity.this, selectedPaths.size() + " added to queue",
-                            Toast.LENGTH_SHORT).show();
+                    Toast.makeText(GroupSongsActivity.this, selectedPaths.size() + " added to queue", Toast.LENGTH_SHORT).show();
                     mode.finish();
                     return true;
                 } else if (id == R.id.action_play_next) {
@@ -111,8 +110,7 @@ public class GroupSongsActivity extends AppCompatActivity {
                     intent.setAction(MusicService.ACTION_PLAY_NEXT_MULTIPLE);
                     intent.putStringArrayListExtra("songPaths", selectedPaths);
                     startService(intent);
-                    Toast.makeText(GroupSongsActivity.this, selectedPaths.size() + " will play next",
-                            Toast.LENGTH_SHORT).show();
+                    Toast.makeText(GroupSongsActivity.this, selectedPaths.size() + " will play next", Toast.LENGTH_SHORT).show();
                     mode.finish();
                     return true;
                 } else if (id == R.id.action_add_to_playlist) {
@@ -121,35 +119,33 @@ public class GroupSongsActivity extends AppCompatActivity {
                     return true;
                 } else if (id == R.id.action_fav) {
                     favManager.addFavourites(selectedPaths);
-                    Toast.makeText(GroupSongsActivity.this, selectedPaths.size() + " added to Favourites",
-                            Toast.LENGTH_SHORT).show();
+                    Toast.makeText(GroupSongsActivity.this, selectedPaths.size() + " added to Favourites", Toast.LENGTH_SHORT).show();
                     mode.finish();
                     return true;
                 } else if (id == R.id.action_delete) {
                     new AlertDialog.Builder(GroupSongsActivity.this)
-                            .setTitle("Delete Songs")
-                            .setMessage("Are you sure you want to delete " + selectedPaths.size() + " songs?")
-                            .setPositiveButton("Yes", (dialog, which) -> {
-                                int deletedCount = 0;
-                                for (String path : selectedPaths) {
-                                    File file = new File(path);
-                                    if (file.exists() && file.delete()) {
-                                        getContentResolver().delete(
-                                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                                MediaStore.Audio.Media.DATA + "=?", new String[] { path });
-                                        if (favManager.isFavourite(path)) {
-                                            favManager.removeFavourite(path);
-                                        }
-                                        deletedCount++;
+                        .setTitle("Delete Songs")
+                        .setMessage("Are you sure you want to delete " + selectedPaths.size() + " songs?")
+                        .setPositiveButton("Yes", (dialog, which) -> {
+                            int deletedCount = 0;
+                            for (String path : selectedPaths) {
+                                File file = new File(path);
+                                if (file.exists() && file.delete()) {
+                                    getContentResolver().delete(
+                                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, 
+                                        MediaStore.Audio.Media.DATA + "=?", new String[]{path});
+                                    if (favManager.isFavourite(path)) {
+                                        favManager.removeFavourite(path);
                                     }
+                                    deletedCount++;
                                 }
-                                Toast.makeText(GroupSongsActivity.this, deletedCount + " songs deleted",
-                                        Toast.LENGTH_SHORT).show();
-                                loadGroupSongs(getIntent().getStringExtra("type"), getIntent().getStringExtra("name"));
-                                mode.finish();
-                            })
-                            .setNegativeButton("No", null)
-                            .show();
+                            }
+                            Toast.makeText(GroupSongsActivity.this, deletedCount + " songs deleted", Toast.LENGTH_SHORT).show();
+                            loadGroupSongs(getIntent().getStringExtra("type"), getIntent().getStringExtra("name"));
+                            mode.finish();
+                        })
+                        .setNegativeButton("No", null)
+                        .show();
                     return true;
                 }
                 return false;
@@ -182,19 +178,20 @@ public class GroupSongsActivity extends AppCompatActivity {
 
             if ("artist".equals(type)) {
                 selection += " AND " + MediaStore.Audio.Media.ARTIST + "=?";
-                selectionArgs = new String[] { name };
+                selectionArgs = new String[]{name};
             } else if ("album".equals(type)) {
                 selection += " AND " + MediaStore.Audio.Media.ALBUM + "=?";
-                selectionArgs = new String[] { name };
+                selectionArgs = new String[]{name};
             }
 
             Cursor cursor = getContentResolver().query(
-                    uri, null, selection, selectionArgs, MediaStore.Audio.Media.TITLE + " ASC");
+                    uri, null, selection, selectionArgs, MediaStore.Audio.Media.TITLE + " ASC"
+            );
 
             if (cursor != null) {
                 while (cursor.moveToNext()) {
                     String path = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA));
-
+                    
                     if ("folder".equals(type)) {
                         File file = new File(path);
                         if (file.getParent() == null || !file.getParent().equals(name)) {
@@ -205,8 +202,7 @@ public class GroupSongsActivity extends AppCompatActivity {
                     String artist = "<Unknown>";
                     try {
                         artist = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST));
-                    } catch (Exception e) {
-                    }
+                    } catch (Exception e) {}
 
                     songList.add(path);
                     artistList.add(artist);
@@ -231,20 +227,11 @@ public class GroupSongsActivity extends AppCompatActivity {
     private void setAdapter() {
         listView.setAdapter(new BaseAdapter() {
             @Override
-            public int getCount() {
-                return items.length;
-            }
-
+            public int getCount() { return items.length; }
             @Override
-            public Object getItem(int i) {
-                return null;
-            }
-
+            public Object getItem(int i) { return null; }
             @Override
-            public long getItemId(int i) {
-                return 0;
-            }
-
+            public long getItemId(int i) { return 0; }
             @Override
             public View getView(int i, View view, ViewGroup parent) {
                 View v = getLayoutInflater().inflate(R.layout.list_items, null);
@@ -252,14 +239,13 @@ public class GroupSongsActivity extends AppCompatActivity {
                 TextView txtArtist = v.findViewById(R.id.txtartist);
                 ImageView img = v.findViewById(R.id.songImg);
                 ImageView btnMore = v.findViewById(R.id.btnMore);
-
+                
                 txt.setText(items[i]);
-                if (txtArtist != null)
-                    txtArtist.setText(artists[i]);
-
+                if (txtArtist != null) txtArtist.setText(artists[i]);
+                
                 String path = songList.get(i);
                 img.setTag(path);
-
+                
                 if (btnMore != null) {
                     btnMore.setOnClickListener(view1 -> {
                         PopupMenu popupMenu = new PopupMenu(GroupSongsActivity.this, view1);
@@ -270,10 +256,7 @@ public class GroupSongsActivity extends AppCompatActivity {
                         popupMenu.setOnMenuItemClickListener(item -> {
                             if (item.getItemId() == R.id.action_fav) {
                                 favManager.toggleFavourite(path);
-                                Toast.makeText(GroupSongsActivity.this,
-                                        favManager.isFavourite(path) ? "Added to Favourites"
-                                                : "Removed from Favourites",
-                                        Toast.LENGTH_SHORT).show();
+                                Toast.makeText(GroupSongsActivity.this, favManager.isFavourite(path) ? "Added to Favourites" : "Removed from Favourites", Toast.LENGTH_SHORT).show();
                                 return true;
                             } else if (item.getItemId() == R.id.action_play_next) {
                                 Intent intent = new Intent(GroupSongsActivity.this, MusicService.class);
@@ -298,7 +281,7 @@ public class GroupSongsActivity extends AppCompatActivity {
                         popupMenu.show();
                     });
                 }
-
+                
                 AlbumArtLoader loader = AlbumArtLoader.getInstance();
                 Bitmap cachedBitmap = loader.getCachedThumb(path);
                 if (cachedBitmap != null) {
@@ -313,7 +296,7 @@ public class GroupSongsActivity extends AppCompatActivity {
                         });
                     }
                 }
-
+                
                 return v;
             }
         });
@@ -336,16 +319,16 @@ public class GroupSongsActivity extends AppCompatActivity {
             Toast.makeText(this, "No playlists available. Create one first.", Toast.LENGTH_SHORT).show();
             return;
         }
-
+        
         String[] playlistArray = playlists.toArray(new String[0]);
         new android.app.AlertDialog.Builder(this)
-                .setTitle("Add to Playlist")
-                .setItems(playlistArray, (dialog, which) -> {
-                    String selectedPlaylist = playlistArray[which];
-                    playlistManager.addSongToPlaylist(selectedPlaylist, songPath);
-                    Toast.makeText(this, "Added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
-                })
-                .show();
+            .setTitle("Add to Playlist")
+            .setItems(playlistArray, (dialog, which) -> {
+                String selectedPlaylist = playlistArray[which];
+                playlistManager.addSongToPlaylist(selectedPlaylist, songPath);
+                Toast.makeText(this, "Added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
+            })
+            .show();
     }
 
     private void showAddMultipleToPlaylistDialog(ArrayList<String> songPaths) {
@@ -355,16 +338,15 @@ public class GroupSongsActivity extends AppCompatActivity {
             Toast.makeText(this, "No playlists available. Create one first.", Toast.LENGTH_SHORT).show();
             return;
         }
-
+        
         String[] playlistArray = playlists.toArray(new String[0]);
         new android.app.AlertDialog.Builder(this)
-                .setTitle("Add to Playlist")
-                .setItems(playlistArray, (dialog, which) -> {
-                    String selectedPlaylist = playlistArray[which];
-                    playlistManager.addSongsToPlaylist(selectedPlaylist, songPaths);
-                    Toast.makeText(this, songPaths.size() + " songs added to " + selectedPlaylist, Toast.LENGTH_SHORT)
-                            .show();
-                })
-                .show();
+            .setTitle("Add to Playlist")
+            .setItems(playlistArray, (dialog, which) -> {
+                String selectedPlaylist = playlistArray[which];
+                playlistManager.addSongsToPlaylist(selectedPlaylist, songPaths);
+                Toast.makeText(this, songPaths.size() + " songs added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
+            })
+            .show();
     }
 }

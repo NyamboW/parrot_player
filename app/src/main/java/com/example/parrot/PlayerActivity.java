@@ -51,7 +51,7 @@ public class PlayerActivity extends AppCompatActivity {
             MusicService.MyBinder binder = (MusicService.MyBinder) service;
             musicService = binder.getService();
             isBound = true;
-
+            
             // Sync with current state
             if (musicService.isPlaying()) {
                 btnPlay.setImageResource(R.drawable.ic_pause);
@@ -82,12 +82,12 @@ public class PlayerActivity extends AppCompatActivity {
 
                     seekBar.setMax(duration);
                     txtEnd.setText(formatTime(duration));
-
+                    
                     if (songPath != null && !songPath.equals(imgView.getTag())) {
                         imgView.setTag(songPath);
                         loadAlbumArt(songPath);
                     }
-
+                    
                     // Update favourite icon
                     if (songPath != null) {
                         currentSongPath = songPath;
@@ -132,7 +132,7 @@ public class PlayerActivity extends AppCompatActivity {
                 String initialSongPath = mySongs.get(position);
                 imgView.setTag(initialSongPath);
                 loadAlbumArt(initialSongPath);
-
+                
                 java.io.File file = new java.io.File(initialSongPath);
                 txtSong.setText(file.getName().replace(".mp3", ""));
                 currentSongPath = initialSongPath;
@@ -143,7 +143,7 @@ public class PlayerActivity extends AppCompatActivity {
             serviceIntent.setAction(MusicService.ACTION_START);
             serviceIntent.putStringArrayListExtra("songs", mySongs);
             serviceIntent.putExtra("pos", position);
-
+            
             // Ensure service is started as foreground
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent);
@@ -151,7 +151,7 @@ public class PlayerActivity extends AppCompatActivity {
                 startService(serviceIntent);
             }
         }
-
+        
         Intent bindIntent = new Intent(this, MusicService.class);
         bindService(bindIntent, serviceConnection, Context.BIND_AUTO_CREATE);
 
@@ -161,15 +161,13 @@ public class PlayerActivity extends AppCompatActivity {
 
         btnShuffle.setOnClickListener(v -> {
             isShuffle = !isShuffle;
-            if (isBound)
-                musicService.setShuffle(isShuffle);
+            if (isBound) musicService.setShuffle(isShuffle);
             btnShuffle.setAlpha(isShuffle ? 1.0f : 0.5f);
         });
-
+        
         btnRepeat.setOnClickListener(v -> {
             isRepeat = !isRepeat;
-            if (isBound)
-                musicService.setRepeat(isRepeat);
+            if (isBound) musicService.setRepeat(isRepeat);
             btnRepeat.setAlpha(isRepeat ? 1.0f : 0.5f);
         });
 
@@ -188,13 +186,8 @@ public class PlayerActivity extends AppCompatActivity {
                 }
             }
 
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
         startSeekBarUpdate();
@@ -219,7 +212,7 @@ public class PlayerActivity extends AppCompatActivity {
                             .setAccentColor(android.graphics.Color.parseColor("#4CAF50"))
                             .build();
                     fragment.show(getSupportFragmentManager(), "eq");
-
+                    
                     getSupportFragmentManager().executePendingTransactions();
                     if (fragment.getDialog() != null) {
                         fragment.getDialog().setOnDismissListener(dialog -> {
@@ -238,19 +231,19 @@ public class PlayerActivity extends AppCompatActivity {
     private void saveAndReloadEqualizer() {
         android.content.SharedPreferences prefs = getSharedPreferences("parrot_eq", Context.MODE_PRIVATE);
         android.content.SharedPreferences.Editor editor = prefs.edit();
-
+        
         editor.putBoolean("isEqualizerEnabled", com.bullhead.equalizer.Settings.isEqualizerEnabled);
         editor.putInt("presetPos", com.bullhead.equalizer.Settings.presetPos);
         editor.putInt("reverbPreset", com.bullhead.equalizer.Settings.reverbPreset);
         editor.putInt("bassStrength", com.bullhead.equalizer.Settings.bassStrength);
-
+        
         if (com.bullhead.equalizer.Settings.seekbarpos != null) {
             for (int i = 0; i < com.bullhead.equalizer.Settings.seekbarpos.length; i++) {
                 editor.putInt("band" + i, com.bullhead.equalizer.Settings.seekbarpos[i]);
             }
         }
         editor.apply();
-
+        
         sendActionToService(MusicService.ACTION_RELOAD_EQUALIZER);
     }
 
@@ -295,7 +288,7 @@ public class PlayerActivity extends AppCompatActivity {
         intent.setAction(action);
         startService(intent);
     }
-
+    
     private void updateFavIcon() {
         if (currentSongPath != null && favManager != null) {
             if (favManager.isFavourite(currentSongPath)) {
@@ -319,8 +312,7 @@ public class PlayerActivity extends AppCompatActivity {
                         int current = musicService.getMediaPlayer().getCurrentPosition();
                         seekBar.setProgress(current);
                         txtStart.setText(formatTime(current));
-                    } catch (Exception ignored) {
-                    }
+                    } catch (Exception ignored) {}
                 }
                 handler.postDelayed(this, 500);
             }
@@ -340,13 +332,13 @@ public class PlayerActivity extends AppCompatActivity {
         IntentFilter filter = new IntentFilter();
         filter.addAction(MusicService.BROADCAST_UPDATE_UI);
         filter.addAction("com.example.parrot.CLOSE_APP");
-
+        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(updateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
             registerReceiver(updateReceiver, filter);
         }
-
+        
         Intent intent = new Intent(this, MusicService.class);
         intent.setAction(MusicService.ACTION_REQUEST_UPDATE);
         startService(intent);
