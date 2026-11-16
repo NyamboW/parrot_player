@@ -20,4 +20,12 @@
         <item name="android:fontFamily">sans-serif-medium</item>
         <item name="android:letterSpacing">0.01</item>
     </style>
+
+    <style name="ParrotNoActionBar" parent="Theme.AppCompat.NoActionBar">
+        <item name="windowActionModeOverlay">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="actionModeBackground">@color/action_mode_bg</item>
+        <item name="android:actionModeBackground">@color/action_mode_bg</item>
+        <item name="colorAccent">@color/parrot_accent</item>
+    </style>
 </resources>

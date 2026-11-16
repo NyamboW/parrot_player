@@ -26,7 +26,7 @@
         android:label="@string/app_name"
         android:roundIcon="@drawable/theicon"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+        android:theme="@style/ParrotNoActionBar">
 
         <activity
             android:name=".PlayerActivity"
@@ -35,12 +35,12 @@
         <activity
             android:name=".GroupSongsActivity"
             android:exported="false"
-            android:theme="@style/Theme.AppCompat.NoActionBar" />
+            android:theme="@style/ParrotNoActionBar" />
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+            android:theme="@style/ParrotNoActionBar">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

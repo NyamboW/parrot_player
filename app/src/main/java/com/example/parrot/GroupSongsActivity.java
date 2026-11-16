@@ -10,6 +10,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.PopupMenu;
@@ -36,6 +37,8 @@ public class GroupSongsActivity extends AppCompatActivity {
     private String[] items;
     private String[] artists;
     private FavouritesManager favManager;
+    private BaseAdapter songsAdapter;
+    private boolean isMultiSelectMode = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,11 +75,18 @@ public class GroupSongsActivity extends AppCompatActivity {
             public void onItemCheckedStateChanged(ActionMode mode, int position, long id, boolean checked) {
                 int count = listView.getCheckedItemCount();
                 mode.setTitle(count + " selected");
+                if (songsAdapter != null) {
+                    songsAdapter.notifyDataSetChanged();
+                }
             }
 
             @Override
             public boolean onCreateActionMode(ActionMode mode, Menu menu) {
                 mode.getMenuInflater().inflate(R.menu.menu_cab_songs, menu);
+                isMultiSelectMode = true;
+                if (songsAdapter != null) {
+                    songsAdapter.notifyDataSetChanged();
+                }
                 return true;
             }
 
@@ -87,17 +97,41 @@ public class GroupSongsActivity extends AppCompatActivity {
 
             @Override
             public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+                int id = item.getItemId();
+                if (id == R.id.action_select_all) {
+                    int total = listView.getCount();
+                    boolean selectAll = listView.getCheckedItemCount() < total;
+                    for (int idx = 0; idx < total; idx++) {
+                        listView.setItemChecked(idx, selectAll);
+                    }
+                    if (songsAdapter != null) {
+                        songsAdapter.notifyDataSetChanged();
+                    }
+                    return true;
+                }
+
                 SparseBooleanArray checked = listView.getCheckedItemPositions();
                 ArrayList<String> selectedPaths = new ArrayList<>();
                 for (int i = 0; i < checked.size(); i++) {
                     int pos = checked.keyAt(i);
-                    if (checked.valueAt(i)) {
+                    if (checked.valueAt(i) && pos >= 0 && pos < songList.size()) {
                         selectedPaths.add(songList.get(pos));
                     }
                 }
+                if (selectedPaths.isEmpty()) {
+                    mode.finish();
+                    return true;
+                }
 
-                int id = item.getItemId();
-                if (id == R.id.action_add_to_queue) {
+                if (id == R.id.action_play_selected) {
+                    AlbumArtLoader.getInstance().preloadFullArt(selectedPaths.get(0));
+                    Intent intent = new Intent(GroupSongsActivity.this, PlayerActivity.class);
+                    intent.putStringArrayListExtra("songs", selectedPaths);
+                    intent.putExtra("pos", 0);
+                    startActivity(intent);
+                    mode.finish();
+                    return true;
+                } else if (id == R.id.action_add_to_queue) {
                     Intent intent = new Intent(GroupSongsActivity.this, MusicService.class);
                     intent.setAction(MusicService.ACTION_ADD_MULTIPLE_TO_QUEUE);
                     intent.putStringArrayListExtra("songPaths", selectedPaths);
@@ -153,6 +187,10 @@ public class GroupSongsActivity extends AppCompatActivity {
 
             @Override
             public void onDestroyActionMode(ActionMode mode) {
+                isMultiSelectMode = false;
+                if (songsAdapter != null) {
+                    songsAdapter.notifyDataSetChanged();
+                }
             }
         });
     }
@@ -225,7 +263,7 @@ public class GroupSongsActivity extends AppCompatActivity {
     }
 
     private void setAdapter() {
-        listView.setAdapter(new BaseAdapter() {
+        songsAdapter = new BaseAdapter() {
             @Override
             public int getCount() { return items.length; }
             @Override
@@ -235,13 +273,35 @@ public class GroupSongsActivity extends AppCompatActivity {
             @Override
             public View getView(int i, View view, ViewGroup parent) {
                 View v = getLayoutInflater().inflate(R.layout.list_items, null);
+                View rowContainer = v.findViewById(R.id.songRowContainer);
                 TextView txt = v.findViewById(R.id.txtSong);
                 TextView txtArtist = v.findViewById(R.id.txtartist);
                 ImageView img = v.findViewById(R.id.songImg);
                 ImageView btnMore = v.findViewById(R.id.btnMore);
+                ImageView imgCheckMark = v.findViewById(R.id.imgCheckMark);
                 
                 txt.setText(items[i]);
                 if (txtArtist != null) txtArtist.setText(artists[i]);
+
+                boolean isChecked = isMultiSelectMode && listView.isItemChecked(i);
+                if (rowContainer != null) {
+                    rowContainer.setActivated(isChecked);
+                }
+                txt.setTextColor(isChecked
+                        ? android.graphics.Color.parseColor("#4CAF50")
+                        : android.graphics.Color.parseColor("#FAF8F8"));
+                if (isMultiSelectMode) {
+                    if (btnMore != null) btnMore.setVisibility(View.GONE);
+                    if (imgCheckMark != null) {
+                        imgCheckMark.setVisibility(View.VISIBLE);
+                        imgCheckMark.setImageResource(isChecked
+                                ? R.drawable.ic_check_circle_filled
+                                : R.drawable.ic_check_circle_outline);
+                    }
+                } else {
+                    if (btnMore != null) btnMore.setVisibility(View.VISIBLE);
+                    if (imgCheckMark != null) imgCheckMark.setVisibility(View.GONE);
+                }
                 
                 String path = songList.get(i);
                 img.setTag(path);
@@ -299,7 +359,8 @@ public class GroupSongsActivity extends AppCompatActivity {
                 
                 return v;
             }
-        });
+        };
+        listView.setAdapter(songsAdapter);
 
         listView.setOnItemClickListener((parent, view, position, id) -> {
             if (position >= 0 && position < songList.size()) {
@@ -313,39 +374,43 @@ public class GroupSongsActivity extends AppCompatActivity {
     }
 
     private void showAddToPlaylistDialog(String songPath) {
-        PlaylistManager playlistManager = new PlaylistManager(this);
-        ArrayList<String> playlists = playlistManager.getPlaylists();
-        if (playlists.isEmpty()) {
-            Toast.makeText(this, "No playlists available. Create one first.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        
-        String[] playlistArray = playlists.toArray(new String[0]);
-        new android.app.AlertDialog.Builder(this)
-            .setTitle("Add to Playlist")
-            .setItems(playlistArray, (dialog, which) -> {
-                String selectedPlaylist = playlistArray[which];
-                playlistManager.addSongToPlaylist(selectedPlaylist, songPath);
-                Toast.makeText(this, "Added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
-            })
-            .show();
+        ArrayList<String> single = new ArrayList<>();
+        single.add(songPath);
+        showAddMultipleToPlaylistDialog(single);
     }
 
     private void showAddMultipleToPlaylistDialog(ArrayList<String> songPaths) {
         PlaylistManager playlistManager = new PlaylistManager(this);
         ArrayList<String> playlists = playlistManager.getPlaylists();
-        if (playlists.isEmpty()) {
-            Toast.makeText(this, "No playlists available. Create one first.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        
-        String[] playlistArray = playlists.toArray(new String[0]);
+        ArrayList<String> options = new ArrayList<>();
+        options.add("+ Create New Playlist");
+        options.addAll(playlists);
+
+        String[] playlistArray = options.toArray(new String[0]);
         new android.app.AlertDialog.Builder(this)
             .setTitle("Add to Playlist")
             .setItems(playlistArray, (dialog, which) -> {
-                String selectedPlaylist = playlistArray[which];
-                playlistManager.addSongsToPlaylist(selectedPlaylist, songPaths);
-                Toast.makeText(this, songPaths.size() + " songs added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
+                if (which == 0) {
+                    final EditText input = new EditText(this);
+                    input.setHint("Playlist name");
+                    new android.app.AlertDialog.Builder(this)
+                        .setTitle("Create New Playlist")
+                        .setView(input)
+                        .setPositiveButton("Create & Add", (d, w) -> {
+                            String name = input.getText().toString().trim();
+                            if (!name.isEmpty()) {
+                                playlistManager.createPlaylist(name);
+                                playlistManager.addSongsToPlaylist(name, songPaths);
+                                Toast.makeText(this, songPaths.size() + " added to " + name, Toast.LENGTH_SHORT).show();
+                            }
+                        })
+                        .setNegativeButton("Cancel", null)
+                        .show();
+                } else {
+                    String selectedPlaylist = playlistArray[which];
+                    playlistManager.addSongsToPlaylist(selectedPlaylist, songPaths);
+                    Toast.makeText(this, songPaths.size() + " added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
+                }
             })
             .show();
     }
