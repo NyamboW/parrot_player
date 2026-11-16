@@ -17,6 +17,7 @@ import android.os.IBinder;
 import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.BaseAdapter;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -34,6 +35,7 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.navigation.NavController;
+import androidx.navigation.NavOptions;
 import androidx.navigation.fragment.NavHostFragment;
 import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
@@ -130,7 +132,12 @@ public class MainActivity extends AppCompatActivity {
                         String song = intent.getStringExtra("song");
                         boolean isPlaying = intent.getBooleanExtra("isPlaying", false);
 
-                        miniPlayer.setVisibility(LinearLayout.VISIBLE);
+                        if (miniPlayer.getVisibility() != View.VISIBLE) {
+                            miniPlayer.setVisibility(View.VISIBLE);
+                            miniPlayer.setAlpha(0f);
+                            miniPlayer.setTranslationY(24f);
+                            miniPlayer.animate().alpha(1f).translationY(0f).setDuration(200).start();
+                        }
                         miniSongName.setText(song);
                         miniPlayPause.setImageResource(
                                 isPlaying ? R.drawable.ic_pause : R.drawable.ic_play
@@ -259,6 +266,7 @@ public class MainActivity extends AppCompatActivity {
         drawerLayout.addDrawerListener(new DrawerLayout.SimpleDrawerListener() {
             @Override
             public void onDrawerOpened(View drawerView) {
+                hideSoftKeyboard();
                 refreshDrawerPlaylists();
                 refreshDrawerCounts();
             }
@@ -268,12 +276,29 @@ public class MainActivity extends AppCompatActivity {
         refreshDrawerCounts();
     }
 
+    private void hideSoftKeyboard() {
+        View currentFocus = getCurrentFocus();
+        if (currentFocus != null) {
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.hideSoftInputFromWindow(currentFocus.getWindowToken(), 0);
+            }
+            currentFocus.clearFocus();
+        }
+    }
+
     private void navigateToDestination(NavController navController, int destinationId) {
         if (navController.getCurrentDestination() != null
                 && navController.getCurrentDestination().getId() == destinationId) {
             return;
         }
-        navController.navigate(destinationId);
+        NavOptions options = new NavOptions.Builder()
+                .setEnterAnim(R.anim.nav_enter)
+                .setExitAnim(R.anim.nav_exit)
+                .setPopEnterAnim(R.anim.nav_enter)
+                .setPopExitAnim(R.anim.nav_exit)
+                .build();
+        navController.navigate(destinationId, null, options);
     }
 
     private void updateDrawerSelection(int destinationId) {

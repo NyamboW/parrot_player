@@ -31,7 +31,9 @@ import java.util.Set;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.widget.SearchView;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import androidx.appcompat.widget.SearchView;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
@@ -493,7 +495,20 @@ public class Music_Fragment extends Fragment {
         };
         listView.setAdapter(songsAdapter);
 
+        listView.setOnScrollListener(new AbsListView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(AbsListView view, int scrollState) {
+                if (scrollState == SCROLL_STATE_TOUCH_SCROLL) {
+                    hideKeyboard(view);
+                }
+            }
+
+            @Override
+            public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {}
+        });
+
         listView.setOnItemClickListener((AdapterView<?> parent, View view, int position, long id) -> {
+            hideKeyboard(listView);
             // Pass the full song list but find the correct position for the tapped filtered song
             String tappedPath = filteredSongList.get(position);
             int actualPosition = songList.indexOf(tappedPath);
@@ -535,26 +550,81 @@ public class Music_Fragment extends Fragment {
         if (searchItem != null) {
             SearchView searchView = (SearchView) searchItem.getActionView();
             if (searchView != null) {
-                searchView.setIconifiedByDefault(false);
-                searchView.setFocusable(true);
-                searchView.requestFocusFromTouch();
-                searchView.setQueryHint("Search songs...");
+                searchView.setIconifiedByDefault(true);
+                searchView.setMaxWidth(Integer.MAX_VALUE);
+                searchView.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
+                searchView.setQueryHint("Search songs or artists...");
+
+                EditText searchEditText = searchView.findViewById(androidx.appcompat.R.id.search_src_text);
+                if (searchEditText != null) {
+                    searchEditText.setTextColor(android.graphics.Color.WHITE);
+                    searchEditText.setHintTextColor(android.graphics.Color.parseColor("#8A93A2"));
+                }
+                View searchPlate = searchView.findViewById(androidx.appcompat.R.id.search_plate);
+                if (searchPlate != null) {
+                    searchPlate.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                }
+
+                searchItem.setOnActionExpandListener(new MenuItem.OnActionExpandListener() {
+                    @Override
+                    public boolean onMenuItemActionExpand(MenuItem item) {
+                        searchView.postDelayed(() -> {
+                            if (!isAdded()) return;
+                            searchView.requestFocus();
+                            View target = searchEditText != null ? searchEditText : searchView;
+                            target.requestFocus();
+                            InputMethodManager imm = (InputMethodManager) requireContext()
+                                    .getSystemService(Context.INPUT_METHOD_SERVICE);
+                            if (imm != null) {
+                                imm.showSoftInput(target, InputMethodManager.SHOW_IMPLICIT);
+                            }
+                        }, 120);
+                        return true;
+                    }
+
+                    @Override
+                    public boolean onMenuItemActionCollapse(MenuItem item) {
+                        currentQuery = "";
+                        searchView.setQuery("", false);
+                        filterSongs("");
+                        searchView.clearFocus();
+                        hideKeyboard(searchView);
+                        return true;
+                    }
+                });
+
                 searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
                     @Override
                     public boolean onQueryTextSubmit(String query) {
-                        return false;
+                        searchView.clearFocus();
+                        hideKeyboard(searchView);
+                        return true;
                     }
 
                     @Override
                     public boolean onQueryTextChange(String newText) {
-                        currentQuery = newText;
-                        filterSongs(newText);
+                        currentQuery = newText != null ? newText : "";
+                        filterSongs(currentQuery);
                         return true;
                     }
                 });
             }
         }
         super.onCreateOptionsMenu(menu, inflater);
+    }
+
+    private void hideKeyboard(View anchor) {
+        if (!isAdded()) return;
+        InputMethodManager imm = (InputMethodManager) requireContext()
+                .getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            View focused = getActivity() != null ? getActivity().getCurrentFocus() : null;
+            View target = focused != null ? focused : anchor;
+            if (target != null) {
+                imm.hideSoftInputFromWindow(target.getWindowToken(), 0);
+                target.clearFocus();
+            }
+        }
     }
 
     private void showAddToPlaylistDialog(String songPath) {

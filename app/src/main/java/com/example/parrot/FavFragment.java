@@ -1,5 +1,6 @@
 package com.example.parrot;
 
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.media.MediaMetadataRetriever;
@@ -28,7 +29,9 @@ import java.util.Comparator;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.widget.SearchView;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import androidx.appcompat.widget.SearchView;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
@@ -467,7 +470,20 @@ public class FavFragment extends Fragment {
 
         favListView.setAdapter(adapter);
 
+        favListView.setOnScrollListener(new AbsListView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(AbsListView view, int scrollState) {
+                if (scrollState == SCROLL_STATE_TOUCH_SCROLL) {
+                    hideKeyboard(view);
+                }
+            }
+
+            @Override
+            public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {}
+        });
+
         favListView.setOnItemClickListener((parent, view, position, id) -> {
+            hideKeyboard(favListView);
             // Use filtered list for playback but pass correct position
             String tappedPath = filteredFavSongs.get(position);
             int actualPosition = favSongs.indexOf(tappedPath);
@@ -509,26 +525,81 @@ public class FavFragment extends Fragment {
         if (searchItem != null) {
             SearchView searchView = (SearchView) searchItem.getActionView();
             if (searchView != null) {
-                searchView.setIconifiedByDefault(false);
-                searchView.setFocusable(true);
-                searchView.requestFocusFromTouch();
+                searchView.setIconifiedByDefault(true);
+                searchView.setMaxWidth(Integer.MAX_VALUE);
+                searchView.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
                 searchView.setQueryHint("Search favourites...");
+
+                EditText searchEditText = searchView.findViewById(androidx.appcompat.R.id.search_src_text);
+                if (searchEditText != null) {
+                    searchEditText.setTextColor(android.graphics.Color.WHITE);
+                    searchEditText.setHintTextColor(android.graphics.Color.parseColor("#8A93A2"));
+                }
+                View searchPlate = searchView.findViewById(androidx.appcompat.R.id.search_plate);
+                if (searchPlate != null) {
+                    searchPlate.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                }
+
+                searchItem.setOnActionExpandListener(new MenuItem.OnActionExpandListener() {
+                    @Override
+                    public boolean onMenuItemActionExpand(MenuItem item) {
+                        searchView.postDelayed(() -> {
+                            if (!isAdded()) return;
+                            searchView.requestFocus();
+                            View target = searchEditText != null ? searchEditText : searchView;
+                            target.requestFocus();
+                            InputMethodManager imm = (InputMethodManager) requireContext()
+                                    .getSystemService(Context.INPUT_METHOD_SERVICE);
+                            if (imm != null) {
+                                imm.showSoftInput(target, InputMethodManager.SHOW_IMPLICIT);
+                            }
+                        }, 120);
+                        return true;
+                    }
+
+                    @Override
+                    public boolean onMenuItemActionCollapse(MenuItem item) {
+                        currentQuery = "";
+                        searchView.setQuery("", false);
+                        filterFavSongs("");
+                        searchView.clearFocus();
+                        hideKeyboard(searchView);
+                        return true;
+                    }
+                });
+
                 searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
                     @Override
                     public boolean onQueryTextSubmit(String query) {
-                        return false;
+                        searchView.clearFocus();
+                        hideKeyboard(searchView);
+                        return true;
                     }
 
                     @Override
                     public boolean onQueryTextChange(String newText) {
-                        currentQuery = newText;
-                        filterFavSongs(newText);
+                        currentQuery = newText != null ? newText : "";
+                        filterFavSongs(currentQuery);
                         return true;
                     }
                 });
             }
         }
         super.onCreateOptionsMenu(menu, inflater);
+    }
+
+    private void hideKeyboard(View anchor) {
+        if (!isAdded()) return;
+        InputMethodManager imm = (InputMethodManager) requireContext()
+                .getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            View focused = getActivity() != null ? getActivity().getCurrentFocus() : null;
+            View target = focused != null ? focused : anchor;
+            if (target != null) {
+                imm.hideSoftInputFromWindow(target.getWindowToken(), 0);
+                target.clearFocus();
+            }
+        }
     }
 
     private void showAddToPlaylistDialog(String songPath) {

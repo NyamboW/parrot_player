@@ -28,4 +28,23 @@
         <item name="android:actionModeBackground">@color/action_mode_bg</item>
         <item name="colorAccent">@color/parrot_accent</item>
     </style>
+
+    <style name="ParrotPlayerAnimation" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/slide_in_up</item>
+        <item name="android:activityOpenExitAnimation">@anim/stay_still</item>
+        <item name="android:activityCloseEnterAnimation">@anim/stay_still</item>
+        <item name="android:activityCloseExitAnimation">@anim/slide_out_down</item>
+    </style>
+
+    <style name="ParrotPlayerTheme" parent="ParrotNoActionBar">
+        <item name="android:windowAnimationStyle">@style/ParrotPlayerAnimation</item>
+    </style>
+
+    <style name="ParrotTabText" parent="TextAppearance.Design.Tab">
+        <item name="textAllCaps">false</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0.01</item>
+    </style>
 </resources>
