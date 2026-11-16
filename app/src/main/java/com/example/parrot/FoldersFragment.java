@@ -31,6 +31,12 @@ public class FoldersFragment extends Fragment {
         return view;
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        loadFolders();
+    }
+
     private void loadFolders() {
         folders.clear();
         Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
@@ -47,7 +53,9 @@ public class FoldersFragment extends Fragment {
                 if (path != null) {
                     File file = new File(path);
                     String parent = file.getParent();
-                    if (parent != null && !folders.contains(parent)) {
+                    if (parent != null
+                            && MusicFolderHelper.isFolderAllowed(requireContext(), parent)
+                            && !folders.contains(parent)) {
                         folders.add(parent);
                     }
                 }

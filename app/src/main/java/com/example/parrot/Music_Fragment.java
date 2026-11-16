@@ -69,6 +69,7 @@ public class Music_Fragment extends Fragment {
     String currentSortOrder = MediaStore.Audio.Media.DATE_ADDED + " DESC";
     private BaseAdapter songsAdapter;
     private boolean isMultiSelectMode = false;
+    private boolean permissionGranted = false;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -98,6 +99,14 @@ public class Music_Fragment extends Fragment {
         requestPermission();
 
         return view;
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (permissionGranted) {
+            loadSongs();
+        }
     }
 
     private void setupMultiSelect() {
@@ -236,7 +245,13 @@ public class Music_Fragment extends Fragment {
                     .withListener(new MultiplePermissionsListener() {
                         @Override
                         public void onPermissionsChecked(MultiplePermissionsReport report) {
-                            loadSongs();
+                            if (isAdded()) {
+                                permissionGranted = true;
+                                loadSongs();
+                                MusicFolderHelper.promptIfNotConfigured(requireContext(), () -> {
+                                    if (isAdded()) loadSongs();
+                                });
+                            }
                         }
 
                         @Override
@@ -254,7 +269,13 @@ public class Music_Fragment extends Fragment {
                     .withListener(new MultiplePermissionsListener() {
                         @Override
                         public void onPermissionsChecked(MultiplePermissionsReport report) {
-                            loadSongs();
+                            if (isAdded()) {
+                                permissionGranted = true;
+                                loadSongs();
+                                MusicFolderHelper.promptIfNotConfigured(requireContext(), () -> {
+                                    if (isAdded()) loadSongs();
+                                });
+                            }
                         }
 
                         @Override
@@ -275,9 +296,6 @@ public class Music_Fragment extends Fragment {
         Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
 
         String selection = MediaStore.Audio.Media.IS_MUSIC + "!=0";
-        
-        SharedPreferences prefs = requireContext().getSharedPreferences("parrot_settings", Context.MODE_PRIVATE);
-        Set<String> savedFolders = prefs.getStringSet(SettingsFragment.KEY_MUSIC_FOLDERS, null);
 
         Cursor cursor = requireContext().getContentResolver().query(
                 uri,
@@ -290,20 +308,12 @@ public class Music_Fragment extends Fragment {
         if (cursor != null) {
             while (cursor.moveToNext()) {
 
-                String name = cursor.getString(
-                        cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
-                );
-
                 String path = cursor.getString(
                         cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
                 );
-                
-                File file = new File(path);
-                String parent = file.getParent();
-                if (savedFolders != null && !savedFolders.isEmpty()) {
-                    if (parent == null || !savedFolders.contains(parent)) {
-                        continue;
-                    }
+
+                if (!MusicFolderHelper.isPathAllowed(requireContext(), path)) {
+                    continue;
                 }
                 
                 String artist = "<Unknown>";

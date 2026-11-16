@@ -30,10 +30,19 @@ public class AlbumsFragment extends Fragment {
         return view;
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        loadAlbums();
+    }
+
     private void loadAlbums() {
         albums.clear();
         Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-        String[] projection = new String[]{MediaStore.Audio.Media.ALBUM};
+        String[] projection = new String[]{
+                MediaStore.Audio.Media.ALBUM,
+                MediaStore.Audio.Media.DATA
+        };
         String selection = MediaStore.Audio.Media.IS_MUSIC + "!=0";
 
         Cursor cursor = requireContext().getContentResolver().query(
@@ -43,6 +52,10 @@ public class AlbumsFragment extends Fragment {
         if (cursor != null) {
             while (cursor.moveToNext()) {
                 String album = cursor.getString(0);
+                String path = cursor.getString(1);
+                if (!MusicFolderHelper.isPathAllowed(requireContext(), path)) {
+                    continue;
+                }
                 if (album != null && !album.equals("<unknown>") && !albums.contains(album)) {
                     albums.add(album);
                 }

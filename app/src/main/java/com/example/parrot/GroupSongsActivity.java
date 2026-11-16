@@ -235,6 +235,8 @@ public class GroupSongsActivity extends AppCompatActivity {
                         if (file.getParent() == null || !file.getParent().equals(name)) {
                             continue;
                         }
+                    } else if (!MusicFolderHelper.isPathAllowed(this, path)) {
+                        continue;
                     }
 
                     String artist = "<Unknown>";

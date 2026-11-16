@@ -150,70 +150,7 @@ public class SettingsFragment extends Fragment {
     }
 
     private void showFolderSelectionDialog() {
-        // Find all distinct folders containing music
-        Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-        String selection = MediaStore.Audio.Media.IS_MUSIC + "!=0";
-        Cursor cursor = requireContext().getContentResolver().query(
-                uri,
-                new String[]{MediaStore.Audio.Media.DATA},
-                selection,
-                null,
-                null
-        );
-
-        Set<String> uniqueFolders = new HashSet<>();
-        if (cursor != null) {
-            while (cursor.moveToNext()) {
-                String path = cursor.getString(0);
-                File file = new File(path);
-                String parent = file.getParent();
-                if (parent != null) {
-                    uniqueFolders.add(parent);
-                }
-            }
-            cursor.close();
-        }
-
-        List<String> folderList = new ArrayList<>(uniqueFolders);
-        Collections.sort(folderList);
-
-        if (folderList.isEmpty()) {
-            Toast.makeText(getContext(), "No music folders found", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        String[] folderArray = folderList.toArray(new String[0]);
-        boolean[] checkedItems = new boolean[folderArray.length];
-
-        Set<String> savedFolders = prefs.getStringSet(KEY_MUSIC_FOLDERS, null);
-
-        for (int i = 0; i < folderArray.length; i++) {
-            if (savedFolders == null || savedFolders.contains(folderArray[i])) {
-                checkedItems[i] = true;
-            } else {
-                checkedItems[i] = false;
-            }
-        }
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
-        builder.setTitle("Select Music Folders");
-        builder.setMultiChoiceItems(folderArray, checkedItems, (dialog, which, isChecked) -> {
-            checkedItems[which] = isChecked;
-        });
-
-        builder.setPositiveButton("Save", (dialog, which) -> {
-            Set<String> selectedFolders = new HashSet<>();
-            for (int i = 0; i < folderArray.length; i++) {
-                if (checkedItems[i]) {
-                    selectedFolders.add(folderArray[i]);
-                }
-            }
-            prefs.edit().putStringSet(KEY_MUSIC_FOLDERS, selectedFolders).apply();
-            Toast.makeText(getContext(), "Folders saved. Please refresh the music list.", Toast.LENGTH_SHORT).show();
-        });
-
-        builder.setNegativeButton("Cancel", null);
-        builder.show();
+        MusicFolderHelper.showFolderSelectionDialog(requireContext(), false, null);
     }
     
     private void saveAndReloadEqualizer() {
