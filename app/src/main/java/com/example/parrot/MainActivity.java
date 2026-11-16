@@ -35,11 +35,13 @@ public class MainActivity extends AppCompatActivity {
         SharedPreferences prefs = getSharedPreferences("parrot_settings", MODE_PRIVATE);
         boolean isDarkMode = prefs.getBoolean("dark_mode", true);
         if (isDarkMode) {
-            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES);
+            androidx.appcompat.app.AppCompatDelegate
+                    .setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES);
         } else {
-            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO);
+            androidx.appcompat.app.AppCompatDelegate
+                    .setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO);
         }
-        
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
@@ -74,8 +76,7 @@ public class MainActivity extends AppCompatActivity {
                         miniSongName.setText(song);
 
                         miniPlayPause.setImageResource(
-                                isPlaying ? R.drawable.ic_pause : R.drawable.ic_play
-                        );
+                                isPlaying ? R.drawable.ic_pause : R.drawable.ic_play);
                     } else if (intent.getAction().equals("com.example.parrot.CLOSE_APP")) {
                         finishAffinity();
                     }
@@ -93,28 +94,26 @@ public class MainActivity extends AppCompatActivity {
             registerReceiver(miniReceiver, filter);
         }
 
-        miniPlayer.setOnClickListener(v ->
-                startActivity(new Intent(this, PlayerActivity.class))
-        );
+        miniPlayer.setOnClickListener(v -> startActivity(new Intent(this, PlayerActivity.class)));
 
         androidx.appcompat.widget.Toolbar toolbar = findViewById(R.id.layoutToolBar);
         setSupportActionBar(toolbar);
 
         DrawerLayout drawerLayout = findViewById(R.id.drawerLayout);
         NavigationView navigationView = findViewById(R.id.navigationView);
-        
+
         NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.navHostFragment);
         if (navHostFragment != null) {
             NavController navController = navHostFragment.getNavController();
             NavigationUI.setupWithNavController(navigationView, navController);
-            
-            androidx.navigation.ui.AppBarConfiguration appBarConfiguration =
-                new androidx.navigation.ui.AppBarConfiguration.Builder(navController.getGraph())
-                .setOpenableLayout(drawerLayout)
-                .build();
+
+            androidx.navigation.ui.AppBarConfiguration appBarConfiguration = new androidx.navigation.ui.AppBarConfiguration.Builder(
+                    navController.getGraph())
+                    .setOpenableLayout(drawerLayout)
+                    .build();
             NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
-            
+
             // Close drawer when an item is selected
             navigationView.setNavigationItemSelectedListener(item -> {
                 boolean handled = NavigationUI.onNavDestinationSelected(item, navController);
@@ -131,25 +130,30 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         Intent intent = new Intent(this, MusicService.class);
         intent.setAction(MusicService.ACTION_REQUEST_UPDATE);
-        startService(intent);
+        try {
+            startService(intent);
+        } catch (IllegalStateException ignored) {
+        }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (miniReceiver != null) unregisterReceiver(miniReceiver);
+        if (miniReceiver != null)
+            unregisterReceiver(miniReceiver);
     }
 
     @Override
     public boolean onSupportNavigateUp() {
-        NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager().findFragmentById(R.id.navHostFragment);
+        NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
+                .findFragmentById(R.id.navHostFragment);
         if (navHostFragment != null) {
             NavController navController = navHostFragment.getNavController();
             DrawerLayout drawerLayout = findViewById(R.id.drawerLayout);
-            androidx.navigation.ui.AppBarConfiguration appBarConfiguration =
-                    new androidx.navigation.ui.AppBarConfiguration.Builder(navController.getGraph())
-                            .setOpenableLayout(drawerLayout)
-                            .build();
+            androidx.navigation.ui.AppBarConfiguration appBarConfiguration = new androidx.navigation.ui.AppBarConfiguration.Builder(
+                    navController.getGraph())
+                    .setOpenableLayout(drawerLayout)
+                    .build();
             return NavigationUI.navigateUp(navController, appBarConfiguration) || super.onSupportNavigateUp();
         }
         return super.onSupportNavigateUp();

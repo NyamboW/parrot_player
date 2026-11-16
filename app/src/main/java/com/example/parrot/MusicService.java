@@ -10,7 +10,9 @@ import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
@@ -67,6 +69,21 @@ public class MusicService extends Service {
     private boolean isRepeat = false;
     
     private QueueManager queueManager = new QueueManager();
+    private PlayerStateManager stateManager;
+    private int restoredSeekPosition = 0;
+    private int restoredDuration = 0;
+
+    private static final long STATE_SAVE_INTERVAL_MS = 3000L;
+    private final Handler stateHandler = new Handler(Looper.getMainLooper());
+    private final Runnable periodicStateSaveRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isPlaying()) {
+                saveCurrentState(false);
+                stateHandler.postDelayed(this, STATE_SAVE_INTERVAL_MS);
+            }
+        }
+    };
     
     private Equalizer mEqualizer;
     private BassBoost mBassBoost;
@@ -81,6 +98,8 @@ public class MusicService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        stateManager = new PlayerStateManager(this);
+        restoreSavedState();
         
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         audioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
@@ -92,6 +111,7 @@ public class MusicService extends Service {
                     case AudioManager.AUDIOFOCUS_GAIN:
                         if (!mediaPlayer.isPlaying()) {
                             mediaPlayer.start();
+                            startPeriodicStateSave();
                             updateMediaSession();
                             showNotification(R.drawable.ic_pause);
                             broadcastUIUpdate();
@@ -101,6 +121,8 @@ public class MusicService extends Service {
                     case AudioManager.AUDIOFOCUS_LOSS:
                         if (mediaPlayer.isPlaying()) {
                             mediaPlayer.pause();
+                            stopPeriodicStateSave();
+                            saveCurrentState(false);
                             updateMediaSession();
                             showNotification(R.drawable.ic_play);
                             broadcastUIUpdate();
@@ -109,6 +131,8 @@ public class MusicService extends Service {
                     case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
                         if (mediaPlayer.isPlaying()) {
                             mediaPlayer.pause();
+                            stopPeriodicStateSave();
+                            saveCurrentState(false);
                             updateMediaSession();
                             showNotification(R.drawable.ic_play);
                             broadcastUIUpdate();
@@ -131,7 +155,9 @@ public class MusicService extends Service {
         mediaSession.setCallback(new MediaSessionCompat.Callback() {
             @Override
             public void onPlay() {
-                if (mediaPlayer != null && isPrepared && !mediaPlayer.isPlaying()) {
+                if (mediaPlayer == null && !mySongs.isEmpty()) {
+                    togglePlay();
+                } else if (mediaPlayer != null && isPrepared && !mediaPlayer.isPlaying()) {
                     togglePlay();
                 }
             }
@@ -161,10 +187,7 @@ public class MusicService extends Service {
             @Override
             public void onCustomAction(String action, Bundle extras) {
                 if (ACTION_CLOSE.equals(action)) {
-                    safeRelease();
-                    stopForeground(true);
-                    stopSelf();
-                    sendBroadcast(new Intent("com.example.parrot.CLOSE_APP"));
+                    closePlayerService();
                 }
             }
         });
@@ -194,6 +217,9 @@ public class MusicService extends Service {
                     if (newSongs != null) {
                         mySongs = newSongs;
                         position = intent.getIntExtra("pos", 0);
+                        restoredSeekPosition = 0;
+                        restoredDuration = 0;
+                        stateManager.savePlaylist(mySongs);
                         playSong(position);
                     }
                     break;
@@ -245,13 +271,7 @@ public class MusicService extends Service {
                     }
                     break;
                 case ACTION_CLOSE:
-                    safeRelease();
-                    stopForeground(true);
-                    stopSelf();
-                    
-                    // Exit the app completely
-                    Intent closeIntent = new Intent("com.example.parrot.CLOSE_APP");
-                    sendBroadcast(closeIntent);
+                    closePlayerService();
                     break;
             }
         }
@@ -261,13 +281,16 @@ public class MusicService extends Service {
     public void playSong(int pos) {
         position = pos;
         if (mySongs.isEmpty() || position < 0 || position >= mySongs.size()) return;
-        startPlayback(mySongs.get(position));
+        restoredSeekPosition = 0;
+        restoredDuration = 0;
+        startPlayback(mySongs.get(position), 0);
     }
 
-    private void startPlayback(String songPath) {
+    private void startPlayback(String songPath, int initialSeekMs) {
         safeRelease();
         final int token = ++playToken;
         isPrepared = false;
+        restoredSeekPosition = Math.max(0, initialSeekMs);
 
         MediaPlayer mp = new MediaPlayer();
         mediaPlayer = mp;
@@ -282,16 +305,26 @@ public class MusicService extends Service {
                 isPrepared = true;
                 setupEqualizer();
 
+                int duration = preparedMp.getDuration();
+                if (initialSeekMs > 0 && duration > 0 && initialSeekMs < duration) {
+                    preparedMp.seekTo(initialSeekMs);
+                }
+                restoredSeekPosition = 0;
+                restoredDuration = Math.max(0, duration);
+
                 int result = AudioManagerCompat.requestAudioFocus(audioManager, audioFocusRequest);
                 if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
                     preparedMp.start();
+                    startPeriodicStateSave();
                 }
                 updateMediaSession();
                 showNotification(preparedMp.isPlaying() ? R.drawable.ic_pause : R.drawable.ic_play);
                 broadcastUIUpdate();
+                saveCurrentState(false);
             });
             mp.setOnCompletionListener(completedMp -> {
                 if (token != playToken || completedMp != mediaPlayer) return;
+                stopPeriodicStateSave();
                 if (isRepeat) {
                     playSong(position);
                 } else if (!queueManager.isEmpty()) {
@@ -303,6 +336,7 @@ public class MusicService extends Service {
             mp.setOnErrorListener((errorMp, what, extra) -> {
                 if (token != playToken || errorMp != mediaPlayer) return true;
                 isPrepared = false;
+                stopPeriodicStateSave();
                 return true;
             });
 
@@ -310,6 +344,7 @@ public class MusicService extends Service {
             showNotification(R.drawable.ic_pause);
             broadcastUIUpdate();
             ensureAlbumArtLoaded(songPath);
+            saveCurrentState(false);
 
             mp.prepareAsync();
         } catch (Exception e) {
@@ -330,7 +365,10 @@ public class MusicService extends Service {
             mySongs.add(insertIndex, nextPath);
             position = insertIndex;
 
-            startPlayback(nextPath);
+            stateManager.savePlaylist(mySongs);
+            restoredSeekPosition = 0;
+            restoredDuration = 0;
+            startPlayback(nextPath, 0);
             broadcastQueueUpdate();
         }
     }
@@ -350,22 +388,35 @@ public class MusicService extends Service {
             mySongs.add(insertIndex, path);
             position = insertIndex;
 
-            startPlayback(path);
+            stateManager.savePlaylist(mySongs);
+            restoredSeekPosition = 0;
+            restoredDuration = 0;
+            startPlayback(path, 0);
             broadcastQueueUpdate();
         }
     }
 
     public void togglePlay() {
-        if (mediaPlayer == null || !isPrepared) return;
+        if (mediaPlayer == null) {
+            if (!mySongs.isEmpty() && position >= 0 && position < mySongs.size()) {
+                startPlayback(mySongs.get(position), restoredSeekPosition);
+            }
+            return;
+        }
+        if (!isPrepared) return;
 
         if (mediaPlayer.isPlaying()) {
             mediaPlayer.pause();
+            stopPeriodicStateSave();
+            saveCurrentState(false);
             updateMediaSession();
             showNotification(R.drawable.ic_play);
         } else {
             int result = AudioManagerCompat.requestAudioFocus(audioManager, audioFocusRequest);
             if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
                 mediaPlayer.start();
+                startPeriodicStateSave();
+                saveCurrentState(false);
                 updateMediaSession();
                 showNotification(R.drawable.ic_pause);
             }
@@ -481,10 +532,10 @@ public class MusicService extends Service {
     }
     
     private void broadcastUIUpdate() {
-        if (mediaPlayer == null || mySongs.isEmpty() || position < 0 || position >= mySongs.size()) return;
+        if (mySongs.isEmpty() || position < 0 || position >= mySongs.size()) return;
         
         String songPath = mySongs.get(position);
-        boolean playing = !isPrepared || isPlaying();
+        boolean playing = (mediaPlayer != null && !isPrepared) || isPlaying();
         int duration = getDuration();
         int currentPos = getCurrentPosition();
 
@@ -503,6 +554,9 @@ public class MusicService extends Service {
     }
     
     private void broadcastQueueUpdate() {
+        if (stateManager != null) {
+            stateManager.saveQueue(queueManager.getQueue());
+        }
         Intent intent = new Intent(BROADCAST_QUEUE_UPDATED);
         intent.setPackage(getPackageName());
         sendBroadcast(intent);
@@ -563,7 +617,7 @@ public class MusicService extends Service {
     }
 
     private void updateWidget(String songPath) {
-        if (mediaPlayer == null || songPath == null) return;
+        if (songPath == null) return;
         AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(this);
         ComponentName widgetComponent = new ComponentName(this, PlayerWidgetProvider.class);
         int[] widgetIds = appWidgetManager.getAppWidgetIds(widgetComponent);
@@ -571,8 +625,9 @@ public class MusicService extends Service {
 
         RemoteViews views = PlayerWidgetProvider.getWidgetViews(this);
         views.setTextViewText(R.id.widgetSongName, getFileName(songPath));
+        boolean showPause = (mediaPlayer != null && !isPrepared) || isPlaying();
         views.setImageViewResource(R.id.widgetPlayPause,
-                (!isPrepared || isPlaying()) ? R.drawable.ic_pause : R.drawable.ic_play);
+                showPause ? R.drawable.ic_pause : R.drawable.ic_play);
 
         Bitmap albumArt = AlbumArtLoader.getInstance().getBestCachedArt(songPath);
         if (albumArt != null) {
@@ -644,7 +699,7 @@ public class MusicService extends Service {
                 return mediaPlayer.getCurrentPosition();
             }
         } catch (IllegalStateException ignored) {}
-        return 0;
+        return restoredSeekPosition;
     }
 
     public int getDuration() {
@@ -653,7 +708,7 @@ public class MusicService extends Service {
                 return mediaPlayer.getDuration();
             }
         } catch (IllegalStateException ignored) {}
-        return 0;
+        return restoredDuration;
     }
 
     public String getCurrentSongPath() {
@@ -683,11 +738,21 @@ public class MusicService extends Service {
         if (mediaPlayer != null && isPrepared) {
             mediaPlayer.seekTo(pos);
             updateMediaSession();
+            saveCurrentState(false);
+        } else if (!mySongs.isEmpty()) {
+            restoredSeekPosition = Math.max(0, pos);
+            if (stateManager != null) {
+                stateManager.saveSeekPosition(restoredSeekPosition, restoredDuration);
+            }
+            broadcastUIUpdate();
         }
     }
     
     public void setShuffle(boolean shuffle) {
         isShuffle = shuffle;
+        if (stateManager != null) {
+            stateManager.saveModes(isShuffle, isRepeat);
+        }
     }
 
     public boolean isShuffle() {
@@ -696,6 +761,9 @@ public class MusicService extends Service {
     
     public void setRepeat(boolean repeat) {
         isRepeat = repeat;
+        if (stateManager != null) {
+            stateManager.saveModes(isShuffle, isRepeat);
+        }
     }
 
     public boolean isRepeat() {
@@ -743,9 +811,68 @@ public class MusicService extends Service {
         broadcastQueueUpdate();
     }
 
+    private void restoreSavedState() {
+        if (stateManager == null) return;
+        PlayerStateManager.RestoredState restored = stateManager.restore();
+        isShuffle = restored.isShuffle;
+        isRepeat = restored.isRepeat;
+        if (!restored.queue.isEmpty()) {
+            queueManager.addAllToQueue(restored.queue);
+        }
+        if (restored.hasValidSong()) {
+            mySongs = restored.songs;
+            position = restored.position;
+            restoredSeekPosition = restored.seekPosition;
+            restoredDuration = restored.duration;
+            AlbumArtLoader.getInstance().preloadFullArt(getCurrentSongPath());
+        }
+    }
+
+    private void saveCurrentState(boolean synchronous) {
+        if (stateManager == null || mySongs == null || mySongs.isEmpty()) return;
+        String currentPath = getCurrentSongPath();
+        if (currentPath == null) return;
+        stateManager.savePlaybackState(
+                position,
+                currentPath,
+                getCurrentPosition(),
+                getDuration(),
+                isShuffle,
+                isRepeat,
+                synchronous
+        );
+    }
+
+    private void startPeriodicStateSave() {
+        stopPeriodicStateSave();
+        stateHandler.postDelayed(periodicStateSaveRunnable, STATE_SAVE_INTERVAL_MS);
+    }
+
+    private void stopPeriodicStateSave() {
+        stateHandler.removeCallbacks(periodicStateSaveRunnable);
+    }
+
+    private void closePlayerService() {
+        stopPeriodicStateSave();
+        saveCurrentState(true);
+        safeRelease();
+        stopForeground(true);
+        stopSelf();
+        sendBroadcast(new Intent("com.example.parrot.CLOSE_APP"));
+    }
+
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        stopPeriodicStateSave();
+        saveCurrentState(true);
+        super.onTaskRemoved(rootIntent);
+    }
+
     @Override
     public void onDestroy() {
         super.onDestroy();
+        stopPeriodicStateSave();
+        saveCurrentState(true);
         safeRelease();
         if (mediaSession != null) {
             mediaSession.release();
