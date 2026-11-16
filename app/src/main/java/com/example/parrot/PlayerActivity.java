@@ -46,7 +46,6 @@ import java.util.Locale;
 public class PlayerActivity extends AppCompatActivity {
 
     private static final int COLOR_WHITE = Color.WHITE;
-    private static final int COLOR_ACCENT = Color.parseColor("#4CAF50");
     private static final long SEEKBAR_UPDATE_INTERVAL_MS = 200L;
 
     ArrayList<String> mySongs;
@@ -174,9 +173,7 @@ public class PlayerActivity extends AppCompatActivity {
         btnMic = findViewById(R.id.btnMic);
 
         txtSong.setSelected(true);
-        updateToggleButton(btnShuffle, isShuffle);
-        updateToggleButton(btnRepeat, isRepeat);
-        updateFavIcon(false);
+        applyAccentTheme();
 
         voiceCommandLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
@@ -373,13 +370,14 @@ public class PlayerActivity extends AppCompatActivity {
         if (isBound && musicService != null) {
             int sessionId = musicService.getAudioSessionId();
             if (sessionId != 0) {
+                int accent = AccentColorHelper.getAccentColor(this);
                 DialogEqualizerFragment fragment = DialogEqualizerFragment.newBuilder()
                         .setAudioSessionId(sessionId)
                         .themeColor(Color.parseColor("#0B0B0F"))
                         .textColor(Color.WHITE)
-                        .accentAlpha(Color.parseColor("#444CAF50"))
+                        .accentAlpha(AccentColorHelper.withAlpha(accent, 0x44))
                         .darkColor(Color.parseColor("#0B0B0F"))
-                        .setAccentColor(COLOR_ACCENT)
+                        .setAccentColor(accent)
                         .build();
 
                 getSupportFragmentManager().registerFragmentLifecycleCallbacks(
@@ -546,8 +544,19 @@ public class PlayerActivity extends AppCompatActivity {
     private void updateToggleButton(ImageButton button, boolean enabled) {
         if (button == null)
             return;
+        int accent = AccentColorHelper.getAccentColor(this);
         button.setAlpha(enabled ? 1.0f : 0.5f);
-        ImageViewCompat.setImageTintList(button, ColorStateList.valueOf(enabled ? COLOR_ACCENT : COLOR_WHITE));
+        ImageViewCompat.setImageTintList(button, ColorStateList.valueOf(enabled ? accent : COLOR_WHITE));
+    }
+
+    private void applyAccentTheme() {
+        int accent = AccentColorHelper.getAccentColor(this);
+        if (seekBar != null) {
+            seekBar.setProgressTintList(ColorStateList.valueOf(accent));
+        }
+        updateToggleButton(btnShuffle, isShuffle);
+        updateToggleButton(btnRepeat, isRepeat);
+        updateFavIcon(false);
     }
 
     private void setSongTitle(String title) {
@@ -639,10 +648,11 @@ public class PlayerActivity extends AppCompatActivity {
     private void updateFavIcon(boolean animate) {
         if (btnFav == null)
             return;
+        int accent = AccentColorHelper.getAccentColor(this);
         boolean fav = currentSongPath != null && favManager != null && favManager.isFavourite(currentSongPath);
         btnFav.setImageResource(fav ? R.drawable.ic_fav_filled : R.drawable.ic_fav);
         btnFav.setAlpha(fav ? 1.0f : 0.5f);
-        ImageViewCompat.setImageTintList(btnFav, ColorStateList.valueOf(fav ? COLOR_ACCENT : COLOR_WHITE));
+        ImageViewCompat.setImageTintList(btnFav, ColorStateList.valueOf(fav ? accent : COLOR_WHITE));
         if (animate) {
             popView(btnFav);
         }
@@ -694,6 +704,7 @@ public class PlayerActivity extends AppCompatActivity {
         } else {
             getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         }
+        applyAccentTheme();
 
         IntentFilter filter = new IntentFilter();
         filter.addAction(MusicService.BROADCAST_UPDATE_UI);

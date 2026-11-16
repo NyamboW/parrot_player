@@ -292,6 +292,10 @@ public class GroupSongsActivity extends AppCompatActivity {
                         imgCheckMark.setImageResource(isChecked
                                 ? R.drawable.ic_check_circle_filled
                                 : R.drawable.ic_check_circle_outline);
+                        imgCheckMark.setImageTintList(isChecked
+                                ? android.content.res.ColorStateList.valueOf(
+                                        AccentColorHelper.getAccentColor(GroupSongsActivity.this))
+                                : null);
                     }
                 } else {
                     if (btnMore != null) btnMore.setVisibility(View.VISIBLE);

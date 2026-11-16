@@ -60,6 +60,7 @@ public class QueueBottomSheetFragment extends BottomSheetDialogFragment {
         txtQueueEmpty = view.findViewById(R.id.txtQueueEmpty);
         txtQueueCount = view.findViewById(R.id.txtQueueCount);
         btnClearQueue = view.findViewById(R.id.btnClearQueue);
+        btnClearQueue.setTextColor(AccentColorHelper.getAccentColor(requireContext()));
 
         btnClearQueue.setOnClickListener(v -> {
             if (isBound && musicService != null) {

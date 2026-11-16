@@ -419,6 +419,10 @@ public class Music_Fragment extends Fragment {
                         imgCheckMark.setImageResource(isChecked
                                 ? R.drawable.ic_check_circle_filled
                                 : R.drawable.ic_check_circle_outline);
+                        imgCheckMark.setImageTintList(isChecked
+                                ? android.content.res.ColorStateList.valueOf(
+                                        AccentColorHelper.getAccentColor(requireContext()))
+                                : null);
                     }
                 } else {
                     if (btnMore != null) btnMore.setVisibility(View.VISIBLE);

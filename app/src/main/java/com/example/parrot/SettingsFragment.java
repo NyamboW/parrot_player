@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
@@ -13,12 +14,14 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.widget.SwitchCompat;
+import androidx.core.widget.ImageViewCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 
@@ -49,7 +52,12 @@ public class SettingsFragment extends Fragment {
     private TextView txtCrossfadeValue;
     private SeekBar seekBarCrossfade;
     private SwitchCompat switchSkipSilence, switchPauseOnUnplug, switchResumeOnHeadset, switchKeepScreenOn;
-    private TextView txtMusicFoldersSummary;
+    private TextView txtMusicFoldersSummary, txtAccentColorName;
+    private View viewAccentSwatch;
+    private TextView headerPlaybackTiming, headerAudioHeadset, headerLibraryDisplay;
+    private ImageView iconSleepTimer, iconPlaybackSpeed, iconCrossfade, iconSkipSilence;
+    private ImageView iconEqualizer, iconPauseUnplug, iconResumeHeadset;
+    private ImageView iconAccentColor, iconMusicFolders, iconKeepScreenOn;
 
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private final Runnable sleepTimerUiUpdater = new Runnable() {
@@ -106,6 +114,21 @@ public class SettingsFragment extends Fragment {
 
         prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
 
+        headerPlaybackTiming = view.findViewById(R.id.headerPlaybackTiming);
+        headerAudioHeadset = view.findViewById(R.id.headerAudioHeadset);
+        headerLibraryDisplay = view.findViewById(R.id.headerLibraryDisplay);
+
+        iconSleepTimer = view.findViewById(R.id.iconSleepTimer);
+        iconPlaybackSpeed = view.findViewById(R.id.iconPlaybackSpeed);
+        iconCrossfade = view.findViewById(R.id.iconCrossfade);
+        iconSkipSilence = view.findViewById(R.id.iconSkipSilence);
+        iconEqualizer = view.findViewById(R.id.iconEqualizer);
+        iconPauseUnplug = view.findViewById(R.id.iconPauseUnplug);
+        iconResumeHeadset = view.findViewById(R.id.iconResumeHeadset);
+        iconAccentColor = view.findViewById(R.id.iconAccentColor);
+        iconMusicFolders = view.findViewById(R.id.iconMusicFolders);
+        iconKeepScreenOn = view.findViewById(R.id.iconKeepScreenOn);
+
         txtSleepTimerValue = view.findViewById(R.id.txtSleepTimerValue);
         txtSleepTimerStatus = view.findViewById(R.id.txtSleepTimerStatus);
         seekBarSleepTimer = view.findViewById(R.id.seekBarSleepTimer);
@@ -122,11 +145,14 @@ public class SettingsFragment extends Fragment {
         switchResumeOnHeadset = view.findViewById(R.id.switchResumeOnHeadset);
         switchKeepScreenOn = view.findViewById(R.id.switchKeepScreenOn);
         txtMusicFoldersSummary = view.findViewById(R.id.txtMusicFoldersSummary);
+        txtAccentColorName = view.findViewById(R.id.txtAccentColorName);
+        viewAccentSwatch = view.findViewById(R.id.viewAccentSwatch);
 
         View settingSkipSilence = view.findViewById(R.id.setting_skip_silence);
         View settingEqualizer = view.findViewById(R.id.setting_equalizer);
         View settingPauseOnUnplug = view.findViewById(R.id.setting_pause_on_unplug);
         View settingResumeOnHeadset = view.findViewById(R.id.setting_resume_on_headset);
+        View settingAccentColor = view.findViewById(R.id.setting_accent_color);
         View settingMusicFolders = view.findViewById(R.id.setting_music_folders);
         View settingKeepScreenOn = view.findViewById(R.id.setting_keep_screen_on);
 
@@ -140,14 +166,84 @@ public class SettingsFragment extends Fragment {
                 settingKeepScreenOn
         );
 
+        settingAccentColor.setOnClickListener(v ->
+                AccentColorHelper.showColorPickerDialog(requireContext(), this::applyAccentColor)
+        );
+
         settingEqualizer.setOnClickListener(v -> openEqualizerDialog());
 
         settingMusicFolders.setOnClickListener(v ->
                 MusicFolderHelper.showFolderSelectionDialog(requireContext(), false, this::updateMusicFoldersSummary)
         );
         updateMusicFoldersSummary();
+        applyAccentColor();
 
         return view;
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        applyAccentColor();
+    }
+
+    private void applyAccentColor() {
+        if (!isAdded()) return;
+        int accent = AccentColorHelper.getAccentColor(requireContext());
+        ColorStateList accentList = ColorStateList.valueOf(accent);
+
+        if (headerPlaybackTiming != null) headerPlaybackTiming.setTextColor(accent);
+        if (headerAudioHeadset != null) headerAudioHeadset.setTextColor(accent);
+        if (headerLibraryDisplay != null) headerLibraryDisplay.setTextColor(accent);
+
+        ImageView[] icons = new ImageView[]{
+                iconSleepTimer, iconPlaybackSpeed, iconCrossfade, iconSkipSilence,
+                iconEqualizer, iconPauseUnplug, iconResumeHeadset,
+                iconAccentColor, iconMusicFolders, iconKeepScreenOn
+        };
+        for (ImageView icon : icons) {
+            if (icon != null) {
+                ImageViewCompat.setImageTintList(icon, accentList);
+            }
+        }
+
+        if (txtSleepTimerValue != null) txtSleepTimerValue.setTextColor(accent);
+        if (txtPlaybackSpeedValue != null) txtPlaybackSpeedValue.setTextColor(accent);
+        if (txtCrossfadeValue != null) txtCrossfadeValue.setTextColor(accent);
+
+        AccentColorHelper.tintSeekBar(seekBarSleepTimer, accent);
+        AccentColorHelper.tintSeekBar(seekBarPlaybackSpeed, accent);
+        AccentColorHelper.tintSeekBar(seekBarCrossfade, accent);
+
+        tintSwitch(switchSkipSilence, accent);
+        tintSwitch(switchPauseOnUnplug, accent);
+        tintSwitch(switchResumeOnHeadset, accent);
+        tintSwitch(switchKeepScreenOn, accent);
+
+        if (txtAccentColorName != null) {
+            txtAccentColorName.setText(AccentColorHelper.getAccentName(requireContext()));
+        }
+        if (viewAccentSwatch != null) {
+            float density = getResources().getDisplayMetrics().density;
+            viewAccentSwatch.setBackground(AccentColorHelper.createCircle(
+                    accent, Color.parseColor("#33FFFFFF"), (int) (1.5f * density)));
+        }
+    }
+
+    private void tintSwitch(SwitchCompat sw, int accent) {
+        if (sw == null) return;
+        int[][] states = new int[][]{
+                new int[]{android.R.attr.state_checked},
+                new int[]{}
+        };
+        ColorStateList thumbColors = new ColorStateList(states, new int[]{
+                accent, Color.parseColor("#B0B6C2")
+        });
+        ColorStateList trackColors = new ColorStateList(states, new int[]{
+                AccentColorHelper.withAlpha(accent, 0x55), Color.parseColor("#2A303D")
+        });
+        sw.setThumbTintList(thumbColors);
+        sw.setTrackTintList(trackColors);
     }
 
     private void setupSleepTimerSlider() {
@@ -336,13 +432,14 @@ public class SettingsFragment extends Fragment {
         if (isBound && musicService != null) {
             int sessionId = musicService.getAudioSessionId();
             if (sessionId != 0) {
+                int accent = AccentColorHelper.getAccentColor(requireContext());
                 DialogEqualizerFragment fragment = DialogEqualizerFragment.newBuilder()
                         .setAudioSessionId(sessionId)
                         .themeColor(Color.parseColor("#0B0B0F"))
                         .textColor(Color.WHITE)
-                        .accentAlpha(Color.parseColor("#444CAF50"))
+                        .accentAlpha(AccentColorHelper.withAlpha(accent, 0x44))
                         .darkColor(Color.parseColor("#0B0B0F"))
-                        .setAccentColor(Color.parseColor("#4CAF50"))
+                        .setAccentColor(accent)
                         .build();
 
                 getChildFragmentManager().registerFragmentLifecycleCallbacks(

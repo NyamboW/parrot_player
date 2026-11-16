@@ -1,6 +1,7 @@
 package com.example.parrot;
 
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
@@ -9,6 +10,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -109,8 +111,14 @@ public class FoldersFragment extends Fragment {
                         ? convertView
                         : getLayoutInflater().inflate(R.layout.item_folder_row, parent, false);
 
+                ImageView imgFolderIcon = v.findViewById(R.id.imgFolderIcon);
                 TextView txtName = v.findViewById(R.id.txtFolderName);
                 TextView txtPath = v.findViewById(R.id.txtFolderPath);
+
+                if (imgFolderIcon != null) {
+                    imgFolderIcon.setImageTintList(ColorStateList.valueOf(
+                            AccentColorHelper.getAccentColor(requireContext())));
+                }
 
                 FolderItem item = folders.get(i);
                 txtName.setText(item.name);

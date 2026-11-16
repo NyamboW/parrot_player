@@ -69,6 +69,22 @@ public class AboutUsFragment extends Fragment {
         btnContact = view.findViewById(R.id.btnContact);
         View btnWebsite = view.findViewById(R.id.btnWebsite);
         View btnPlaystore = view.findViewById(R.id.btnPlaystore);
+        android.widget.TextView txtAboutAuthor = view.findViewById(R.id.txtAboutAuthor);
+        android.widget.ImageView imgAboutWebsite = view.findViewById(R.id.imgAboutWebsite);
+        android.widget.ImageView imgAboutPlaystore = view.findViewById(R.id.imgAboutPlaystore);
+
+        int accent = AccentColorHelper.getAccentColor(requireContext());
+        if (txtAboutAuthor != null) txtAboutAuthor.setTextColor(accent);
+        if (imgAboutWebsite != null) {
+            imgAboutWebsite.setImageTintList(android.content.res.ColorStateList.valueOf(accent));
+        }
+        if (imgAboutPlaystore != null) {
+            imgAboutPlaystore.setImageTintList(android.content.res.ColorStateList.valueOf(accent));
+        }
+        if (btnContact != null) {
+            float density = getResources().getDisplayMetrics().density;
+            btnContact.setBackground(AccentColorHelper.createRoundedRect(accent, 0, 0, 12f * density));
+        }
 
         btnWebsite.setOnClickListener(new View.OnClickListener() {
             @Override

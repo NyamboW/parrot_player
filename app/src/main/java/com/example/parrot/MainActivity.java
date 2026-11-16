@@ -45,13 +45,13 @@ import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final int COLOR_ACTIVE_ICON = Color.parseColor("#4CAF50");
     private static final int COLOR_ACTIVE_TEXT = Color.WHITE;
     private static final int COLOR_INACTIVE_ITEM = Color.parseColor("#E0E3E8");
     private static final int COLOR_BOTTOM_ICON = Color.parseColor("#E6E8EC");
 
     LinearLayout miniPlayer;
     TextView miniSongName;
+    ImageView imgMiniMusic;
     ImageButton miniPlayPause;
     ImageButton miniNext;
 
@@ -61,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
     TextView txtNavHome, txtNavFavorites, txtNavFavCount, txtNavQueueCount;
     ImageButton btnDrawerAddPlaylist, btnDrawerExit, btnDrawerSettings, btnDrawerAbout;
     ListView drawerPlaylistsListView;
+    private int currentDestinationId = R.id.homeFragment;
 
     private PlaylistManager playlistManager;
     private FavouritesManager favManager;
@@ -102,6 +103,7 @@ public class MainActivity extends AppCompatActivity {
 
         miniPlayer = findViewById(R.id.miniPlayer);
         miniSongName = findViewById(R.id.miniSongName);
+        imgMiniMusic = findViewById(R.id.imgMiniMusic);
         miniPlayPause = findViewById(R.id.miniPlayPause);
         miniNext = findViewById(R.id.miniNext);
 
@@ -138,6 +140,9 @@ public class MainActivity extends AppCompatActivity {
                     case MusicService.BROADCAST_QUEUE_UPDATED:
                         refreshDrawerCounts();
                         break;
+                    case AccentColorHelper.ACTION_ACCENT_COLOR_CHANGED:
+                        applyAccentTheme();
+                        break;
                     case "com.example.parrot.CLOSE_APP":
                         finishAffinity();
                         break;
@@ -148,6 +153,7 @@ public class MainActivity extends AppCompatActivity {
         IntentFilter filter = new IntentFilter();
         filter.addAction(MusicService.BROADCAST_UPDATE_UI);
         filter.addAction(MusicService.BROADCAST_QUEUE_UPDATED);
+        filter.addAction(AccentColorHelper.ACTION_ACCENT_COLOR_CHANGED);
         filter.addAction("com.example.parrot.CLOSE_APP");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -271,6 +277,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateDrawerSelection(int destinationId) {
+        currentDestinationId = destinationId;
+        int accent = AccentColorHelper.getAccentColor(this);
+        float density = getResources().getDisplayMetrics().density;
+
         boolean isHome = (destinationId == R.id.homeFragment);
         boolean isFav = (destinationId == R.id.menuFavourite);
         boolean isSettings = (destinationId == R.id.MenuSettings);
@@ -278,22 +288,40 @@ public class MainActivity extends AppCompatActivity {
 
         int selectableBg = getSelectableItemBackgroundResId();
 
-        navRowHome.setBackgroundResource(isHome ? R.drawable.drawer_active_item_bg : selectableBg);
+        if (isHome) {
+            navRowHome.setBackground(AccentColorHelper.createRightRoundedPill(
+                    AccentColorHelper.withAlpha(accent, 0x26), 28f * density));
+        } else {
+            navRowHome.setBackgroundResource(selectableBg);
+        }
         ImageViewCompat.setImageTintList(imgNavHome,
-                ColorStateList.valueOf(isHome ? COLOR_ACTIVE_ICON : COLOR_INACTIVE_ITEM));
+                ColorStateList.valueOf(isHome ? accent : COLOR_INACTIVE_ITEM));
         txtNavHome.setTextColor(isHome ? COLOR_ACTIVE_TEXT : COLOR_INACTIVE_ITEM);
         txtNavHome.setTypeface(null, isHome ? Typeface.BOLD : Typeface.NORMAL);
 
-        navRowFavorites.setBackgroundResource(isFav ? R.drawable.drawer_active_item_bg : selectableBg);
+        if (isFav) {
+            navRowFavorites.setBackground(AccentColorHelper.createRightRoundedPill(
+                    AccentColorHelper.withAlpha(accent, 0x26), 28f * density));
+        } else {
+            navRowFavorites.setBackgroundResource(selectableBg);
+        }
         ImageViewCompat.setImageTintList(imgNavFavorites,
-                ColorStateList.valueOf(isFav ? COLOR_ACTIVE_ICON : COLOR_INACTIVE_ITEM));
+                ColorStateList.valueOf(isFav ? accent : COLOR_INACTIVE_ITEM));
         txtNavFavorites.setTextColor(isFav ? COLOR_ACTIVE_TEXT : COLOR_INACTIVE_ITEM);
         txtNavFavorites.setTypeface(null, isFav ? Typeface.BOLD : Typeface.NORMAL);
 
         ImageViewCompat.setImageTintList(btnDrawerSettings,
-                ColorStateList.valueOf(isSettings ? COLOR_ACTIVE_ICON : COLOR_BOTTOM_ICON));
+                ColorStateList.valueOf(isSettings ? accent : COLOR_BOTTOM_ICON));
         ImageViewCompat.setImageTintList(btnDrawerAbout,
-                ColorStateList.valueOf(isAbout ? COLOR_ACTIVE_ICON : COLOR_BOTTOM_ICON));
+                ColorStateList.valueOf(isAbout ? accent : COLOR_BOTTOM_ICON));
+
+        if (imgMiniMusic != null) {
+            ImageViewCompat.setImageTintList(imgMiniMusic, ColorStateList.valueOf(accent));
+        }
+    }
+
+    private void applyAccentTheme() {
+        updateDrawerSelection(currentDestinationId);
     }
 
     private int getSelectableItemBackgroundResId() {
@@ -423,13 +451,14 @@ public class MainActivity extends AppCompatActivity {
         if (isBound && musicService != null) {
             int sessionId = musicService.getAudioSessionId();
             if (sessionId != 0) {
+                int accent = AccentColorHelper.getAccentColor(this);
                 DialogEqualizerFragment fragment = DialogEqualizerFragment.newBuilder()
                         .setAudioSessionId(sessionId)
                         .themeColor(Color.parseColor("#0B0B0F"))
                         .textColor(Color.WHITE)
-                        .accentAlpha(Color.parseColor("#444CAF50"))
+                        .accentAlpha(AccentColorHelper.withAlpha(accent, 0x44))
                         .darkColor(Color.parseColor("#0B0B0F"))
-                        .setAccentColor(COLOR_ACTIVE_ICON)
+                        .setAccentColor(accent)
                         .build();
 
                 getSupportFragmentManager().registerFragmentLifecycleCallbacks(
@@ -474,6 +503,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        applyAccentTheme();
         refreshDrawerPlaylists();
         refreshDrawerCounts();
 

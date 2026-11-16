@@ -82,16 +82,22 @@ public class PlaylistsFragment extends Fragment {
                 ImageView imgArrow = v.findViewById(R.id.imgPlaylistArrow);
 
                 int padPx = (int) (12 * getResources().getDisplayMetrics().density);
+                int accent = AccentColorHelper.getAccentColor(requireContext());
 
                 if (i == 0) {
-                    card.setBackgroundResource(R.drawable.card_create_playlist_bg);
-                    coverCard.setCardBackgroundColor(Color.parseColor("#244CAF50"));
+                    float density = getResources().getDisplayMetrics().density;
+                    card.setBackground(AccentColorHelper.createRoundedRect(
+                            AccentColorHelper.withAlpha(accent, 0x1A),
+                            AccentColorHelper.withAlpha(accent, 0x40),
+                            (int) (1 * density),
+                            14f * density));
+                    coverCard.setCardBackgroundColor(AccentColorHelper.withAlpha(accent, 0x24));
                     imgCover.setTag(null);
                     imgCover.setPadding(padPx, padPx, padPx, padPx);
                     imgCover.setImageResource(R.drawable.ic_nav_playlist_add);
-                    imgCover.setImageTintList(ColorStateList.valueOf(Color.parseColor("#4CAF50")));
+                    imgCover.setImageTintList(ColorStateList.valueOf(accent));
                     txtName.setText("Create New Playlist");
-                    txtName.setTextColor(Color.parseColor("#4CAF50"));
+                    txtName.setTextColor(accent);
                     txtCount.setText("Group your favourite tracks");
                     imgArrow.setVisibility(View.GONE);
                 } else {
