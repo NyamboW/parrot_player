@@ -11,16 +11,31 @@ import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+
 import java.io.File;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class FoldersFragment extends Fragment {
 
+    private static class FolderItem {
+        final String fullPath;
+        final String name;
+        int trackCount = 1;
+
+        FolderItem(String fullPath, String name) {
+            this.fullPath = fullPath;
+            this.name = name;
+        }
+    }
+
     private ListView listView;
-    private ArrayList<String> folders = new ArrayList<>();
+    private final ArrayList<FolderItem> folders = new ArrayList<>();
 
     @Nullable
     @Override
@@ -39,6 +54,8 @@ public class FoldersFragment extends Fragment {
 
     private void loadFolders() {
         folders.clear();
+        Map<String, FolderItem> folderMap = new LinkedHashMap<>();
+
         Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
         String[] projection = new String[]{MediaStore.Audio.Media.DATA};
         String selection = MediaStore.Audio.Media.IS_MUSIC + "!=0";
@@ -53,31 +70,54 @@ public class FoldersFragment extends Fragment {
                 if (path != null) {
                     File file = new File(path);
                     String parent = file.getParent();
-                    if (parent != null
-                            && MusicFolderHelper.isFolderAllowed(requireContext(), parent)
-                            && !folders.contains(parent)) {
-                        folders.add(parent);
+                    if (parent != null && MusicFolderHelper.isFolderAllowed(requireContext(), parent)) {
+                        FolderItem existing = folderMap.get(parent);
+                        if (existing == null) {
+                            String folderName = new File(parent).getName();
+                            if (folderName.isEmpty()) folderName = parent;
+                            folderMap.put(parent, new FolderItem(parent, folderName));
+                        } else {
+                            existing.trackCount++;
+                        }
                     }
                 }
             }
             cursor.close();
         }
 
+        folders.addAll(folderMap.values());
+
         listView.setAdapter(new BaseAdapter() {
             @Override
-            public int getCount() { return folders.size(); }
+            public int getCount() {
+                return folders.size();
+            }
+
             @Override
-            public Object getItem(int i) { return null; }
+            public Object getItem(int i) {
+                return folders.get(i);
+            }
+
             @Override
-            public long getItemId(int i) { return 0; }
+            public long getItemId(int i) {
+                return i;
+            }
+
             @Override
-            public View getView(int i, View view, ViewGroup parent) {
-                View v = getLayoutInflater().inflate(R.layout.list_item_group, null);
-                TextView txt = v.findViewById(R.id.txtGroupName);
-                // Just display the folder name instead of full path
-                String fullPath = folders.get(i);
-                String folderName = fullPath.substring(fullPath.lastIndexOf("/") + 1);
-                txt.setText(folderName);
+            public View getView(int i, View convertView, ViewGroup parent) {
+                View v = convertView != null
+                        ? convertView
+                        : getLayoutInflater().inflate(R.layout.item_folder_row, parent, false);
+
+                TextView txtName = v.findViewById(R.id.txtFolderName);
+                TextView txtPath = v.findViewById(R.id.txtFolderPath);
+
+                FolderItem item = folders.get(i);
+                txtName.setText(item.name);
+
+                String shortPath = item.fullPath.replaceFirst("^/storage/emulated/0", "/Internal");
+                txtPath.setText(item.trackCount + (item.trackCount == 1 ? " track • " : " tracks • ") + shortPath);
+
                 return v;
             }
         });
@@ -85,7 +125,7 @@ public class FoldersFragment extends Fragment {
         listView.setOnItemClickListener((parent, view, position, id) -> {
             Intent intent = new Intent(getContext(), GroupSongsActivity.class);
             intent.putExtra("type", "folder");
-            intent.putExtra("name", folders.get(position)); // Pass full path
+            intent.putExtra("name", folders.get(position).fullPath);
             startActivity(intent);
         });
     }

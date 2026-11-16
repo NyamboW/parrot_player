@@ -1,39 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:layout_marginStart="8dp"
-    android:layout_marginTop="8dp"
-    android:layout_marginEnd="8dp"
-    android:elevation="25dp"
-    app:cardBackgroundColor="@android:color/transparent">
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
 
     <RelativeLayout
         android:id="@+id/songRowContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/list_item_bg_selector"
-        android:duplicateParentState="true"
-        android:padding="8dp">
+        android:background="?attr/selectableItemBackground"
+        android:paddingStart="14dp"
+        android:paddingTop="9dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="9dp">
 
         <androidx.cardview.widget.CardView
             android:id="@+id/songImgCard"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_alignParentLeft="true"
-            android:layout_alignParentTop="true"
-            android:layout_marginStart="5dp"
-            android:layout_marginEnd="5dp"
-            app:cardBackgroundColor="@android:color/transparent"
-            app:cardCornerRadius="8dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:layout_marginEnd="14dp"
+            app:cardBackgroundColor="#181C24"
+            app:cardCornerRadius="10dp"
             app:cardElevation="0dp">
 
             <ImageView
                 android:id="@+id/songImg"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="@drawable/list_dg"
                 android:scaleType="centerCrop"
                 android:src="@drawable/ic_music" />
         </androidx.cardview.widget.CardView>
@@ -42,16 +38,17 @@
             android:id="@+id/rightActionContainer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_alignParentRight="true"
+            android:layout_alignParentEnd="true"
             android:layout_centerVertical="true">
 
             <ImageView
                 android:id="@+id/btnMore"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:padding="8dp"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="7dp"
                 android:src="@drawable/ic_more"
-                app:tint="@color/white" />
+                app:tint="#9AA3B2" />
 
             <ImageView
                 android:id="@+id/imgCheckMark"
@@ -62,39 +59,47 @@
                 android:visibility="gone" />
         </FrameLayout>
 
-        <TextView
-            android:id="@+id/txtSong"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="5dp"
-            android:layout_marginEnd="5dp"
-            android:layout_toLeftOf="@id/rightActionContainer"
-            android:layout_toRightOf="@+id/songImgCard"
-            android:ellipsize="marquee"
-            android:marqueeRepeatLimit="marquee_forever"
-            android:padding="6dp"
-            android:scrollHorizontally="true"
-            android:singleLine="true"
-            android:text="Song Name"
-            android:textColor="#FAF8F8"
-            android:textSize="12dp"
-            android:textStyle="bold" />
+            android:layout_centerVertical="true"
+            android:layout_marginEnd="6dp"
+            android:layout_toStartOf="@id/rightActionContainer"
+            android:layout_toEndOf="@id/songImgCard"
+            android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/txtartist"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_below="@+id/txtSong"
-            android:layout_marginStart="10dp"
-            android:layout_marginEnd="5dp"
-            android:layout_toLeftOf="@id/rightActionContainer"
-            android:layout_toRightOf="@+id/songImgCard"
-            android:ellipsize="end"
-            android:singleLine="true"
-            android:text="Artist"
-            android:textColor="@color/white"
-            android:textSize="10dp" />
+            <TextView
+                android:id="@+id/txtSong"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="marquee"
+                android:fontFamily="sans-serif-medium"
+                android:marqueeRepeatLimit="marquee_forever"
+                android:scrollHorizontally="true"
+                android:singleLine="true"
+                android:text="Song Name"
+                android:textColor="#F5F7FA"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/txtartist"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="Artist"
+                android:textColor="#9AA3B2"
+                android:textSize="12sp" />
+        </LinearLayout>
 
     </RelativeLayout>
 
-</androidx.cardview.widget.CardView>
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:layout_marginStart="76dp"
+        android:layout_marginEnd="14dp"
+        android:background="#181D26" />
+
+</LinearLayout>

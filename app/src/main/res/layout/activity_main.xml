@@ -41,38 +41,54 @@
         <LinearLayout
             android:id="@+id/miniPlayer"
             android:layout_width="0dp"
-            android:layout_height="70dp"
-            android:background="#222222"
-            android:orientation="horizontal"
+            android:layout_height="68dp"
+            android:background="#151820"
+            android:elevation="12dp"
             android:gravity="center_vertical"
-            android:padding="10dp"
+            android:orientation="horizontal"
+            android:paddingStart="16dp"
+            android:paddingEnd="10dp"
             android:visibility="gone"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent">
+
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_marginEnd="12dp"
+                android:src="@drawable/ic_music"
+                app:tint="#4CAF50" />
 
             <TextView
                 android:id="@+id/miniSongName"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-medium"
+                android:singleLine="true"
                 android:text="No song playing"
-                android:textColor="#FFFFFF"
-                android:singleLine="true"/>
+                android:textColor="#F5F7FA"
+                android:textSize="14sp" />
 
             <ImageButton
                 android:id="@+id/miniPlayPause"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@null"
-                android:src="@drawable/ic_play"/>
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="8dp"
+                android:src="@drawable/ic_play"
+                app:tint="#FFFFFF" />
 
             <ImageButton
                 android:id="@+id/miniNext"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@null"
-                android:src="@drawable/ic_next"/>
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="8dp"
+                android:src="@drawable/ic_next"
+                app:tint="#FFFFFF" />
         </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>

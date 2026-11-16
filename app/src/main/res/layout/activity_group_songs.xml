@@ -3,23 +3,31 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="#000000">
+    android:background="#0B0B0F"
+    android:orientation="vertical">
 
     <androidx.appcompat.widget.Toolbar
         android:id="@+id/toolbarGroup"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="#111111"
-        app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar" />
+        android:background="#12151C"
+        app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
+        app:titleTextColor="#FFFFFF" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#1B202A" />
 
     <ListView
         android:id="@+id/listViewGroupSongs"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipToPadding="false"
         android:divider="@android:color/transparent"
-        android:dividerHeight="7dp"
-        android:padding="5dp"
+        android:dividerHeight="0dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="16dp"
         android:scrollbars="none" />
 
 </LinearLayout>
