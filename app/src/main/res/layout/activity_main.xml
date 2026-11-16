@@ -77,22 +77,227 @@
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- DRAWER -->
-    <com.google.android.material.navigation.NavigationView
+    <!-- AIMP-STYLE CUSTOM SIDE DRAWER -->
+    <LinearLayout
         android:id="@+id/navigationView"
-        android:layout_width="290dp"
+        android:layout_width="300dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
-        android:background="#0B0B0F"
-        android:theme="@style/ThemeOverlay.AppCompat.Dark"
-        app:headerLayout="@layout/nav_header"
-        app:itemBackground="@drawable/nav_item_bg"
-        app:itemHorizontalPadding="24dp"
-        app:itemIconPadding="16dp"
-        app:itemIconSize="22dp"
-        app:itemIconTint="@color/nav_item_icon_tint"
-        app:itemTextAppearance="@style/NavDrawerItemText"
-        app:itemTextColor="@color/nav_item_text_color"
-        app:menu="@menu/navigation_menu" />
+        android:background="#181A1D"
+        android:clickable="true"
+        android:focusable="true"
+        android:orientation="vertical"
+        android:paddingTop="14dp"
+        android:theme="@style/ThemeOverlay.AppCompat.Dark">
+
+        <!-- Home -->
+        <LinearLayout
+            android:id="@+id/navRowHome"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginEnd="10dp"
+            android:background="@drawable/drawer_active_item_bg"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp">
+
+            <ImageView
+                android:id="@+id/imgNavHome"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_nav_home"
+                app:tint="#FFFFFF" />
+
+            <TextView
+                android:id="@+id/txtNavHome"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="22dp"
+                android:layout_weight="1"
+                android:text="Home"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp" />
+        </LinearLayout>
+
+        <!-- Sound Effects -->
+        <LinearLayout
+            android:id="@+id/navRowSoundEffects"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginEnd="10dp"
+            android:background="?attr/selectableItemBackground"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp">
+
+            <ImageView
+                android:id="@+id/imgNavSoundEffects"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_nav_equalizer_bars"
+                app:tint="#E0E3E8" />
+
+            <TextView
+                android:id="@+id/txtNavSoundEffects"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="22dp"
+                android:layout_weight="1"
+                android:text="Sound Effects"
+                android:textColor="#E0E3E8"
+                android:textSize="15sp" />
+        </LinearLayout>
+
+        <!-- Favorites -->
+        <LinearLayout
+            android:id="@+id/navRowFavorites"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginEnd="10dp"
+            android:background="?attr/selectableItemBackground"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp">
+
+            <ImageView
+                android:id="@+id/imgNavFavorites"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_nav_favourites"
+                app:tint="#E0E3E8" />
+
+            <TextView
+                android:id="@+id/txtNavFavorites"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="22dp"
+                android:layout_weight="1"
+                android:text="Favorites"
+                android:textColor="#E0E3E8"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/txtNavFavCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="#C8CCD4"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- Queue -->
+        <LinearLayout
+            android:id="@+id/navRowQueue"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginEnd="10dp"
+            android:background="?attr/selectableItemBackground"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp">
+
+            <ImageView
+                android:id="@+id/imgNavQueue"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_nav_queue"
+                app:tint="#E0E3E8" />
+
+            <TextView
+                android:id="@+id/txtNavQueue"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="22dp"
+                android:layout_weight="1"
+                android:text="Queue"
+                android:textColor="#E0E3E8"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/txtNavQueueCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="#C8CCD4"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- Centered Create Playlist Button -->
+        <ImageButton
+            android:id="@+id/btnDrawerAddPlaylist"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="6dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:padding="9dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_nav_playlist_add"
+            app:tint="#E6E8EC" />
+
+        <!-- Created Playlists List -->
+        <ListView
+            android:id="@+id/drawerPlaylistsListView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:divider="@null"
+            android:dividerHeight="0dp"
+            android:overScrollMode="never" />
+
+        <!-- Bottom Pill Bar: Exit, Settings, About -->
+        <LinearLayout
+            android:id="@+id/drawerBottomBar"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="20dp"
+            android:background="@drawable/drawer_bottom_bar_bg"
+            android:elevation="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp">
+
+            <ImageButton
+                android:id="@+id/btnDrawerExit"
+                android:layout_width="46dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_nav_exit"
+                app:tint="#E6E8EC" />
+
+            <ImageButton
+                android:id="@+id/btnDrawerSettings"
+                android:layout_width="46dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_nav_settings"
+                app:tint="#E6E8EC" />
+
+            <ImageButton
+                android:id="@+id/btnDrawerAbout"
+                android:layout_width="46dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_nav_info_filled"
+                app:tint="#E6E8EC" />
+        </LinearLayout>
+
+    </LinearLayout>
 
 </androidx.drawerlayout.widget.DrawerLayout>
