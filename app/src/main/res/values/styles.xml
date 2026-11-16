@@ -14,4 +14,10 @@
     <style name="TextViewStyle" parent="android:Widget.TextView">
     <item name="android:textSize">14sp</item>
         <item name="android:textColor">#fff</item> </style>
+
+    <style name="NavDrawerItemText" parent="TextAppearance.AppCompat.Body2">
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0.01</item>
+    </style>
 </resources>

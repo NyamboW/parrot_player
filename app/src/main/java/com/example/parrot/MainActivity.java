@@ -7,10 +7,14 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.SubMenu;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.GravityCompat;
@@ -114,8 +118,44 @@ public class MainActivity extends AppCompatActivity {
                     .build();
             NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
 
-            // Close drawer when an item is selected
+            // Sync active drawer item highlight across categorized submenus
+            navController.addOnDestinationChangedListener((controller, destination, arguments) -> {
+                Menu menu = navigationView.getMenu();
+                int destId = destination.getId();
+                for (int i = 0; i < menu.size(); i++) {
+                    MenuItem menuItem = menu.getItem(i);
+                    if (menuItem.hasSubMenu()) {
+                        SubMenu subMenu = menuItem.getSubMenu();
+                        for (int j = 0; j < subMenu.size(); j++) {
+                            MenuItem subItem = subMenu.getItem(j);
+                            if (subItem.isCheckable()) {
+                                subItem.setChecked(subItem.getItemId() == destId);
+                            }
+                        }
+                    } else if (menuItem.isCheckable()) {
+                        menuItem.setChecked(menuItem.getItemId() == destId);
+                    }
+                }
+            });
+
+            // Handle drawer navigation & quick playback actions
             navigationView.setNavigationItemSelectedListener(item -> {
+                int id = item.getItemId();
+                if (id == R.id.nav_now_playing) {
+                    drawerLayout.closeDrawer(GravityCompat.START);
+                    PlayerStateManager.RestoredState state = new PlayerStateManager(this).restore();
+                    if (state.hasValidSong() || miniPlayer.getVisibility() == LinearLayout.VISIBLE) {
+                        startActivity(new Intent(this, PlayerActivity.class));
+                    } else {
+                        Toast.makeText(this, "Play a song first", Toast.LENGTH_SHORT).show();
+                    }
+                    return true;
+                } else if (id == R.id.nav_queue) {
+                    drawerLayout.closeDrawer(GravityCompat.START);
+                    new QueueBottomSheetFragment().show(getSupportFragmentManager(), "queue");
+                    return true;
+                }
+
                 boolean handled = NavigationUI.onNavDestinationSelected(item, navController);
                 if (handled) {
                     drawerLayout.closeDrawer(GravityCompat.START);
