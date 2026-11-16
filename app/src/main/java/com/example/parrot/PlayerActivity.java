@@ -47,7 +47,6 @@ public class PlayerActivity extends AppCompatActivity {
 
     private static final int COLOR_WHITE = Color.WHITE;
     private static final int COLOR_ACCENT = Color.parseColor("#4CAF50");
-    private static final int COLOR_FAV_ACTIVE = Color.parseColor("#FF5252");
     private static final long SEEKBAR_UPDATE_INTERVAL_MS = 200L;
 
     ArrayList<String> mySongs;
@@ -96,7 +95,8 @@ public class PlayerActivity extends AppCompatActivity {
     private final BroadcastReceiver updateReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent.getAction() == null) return;
+            if (intent.getAction() == null)
+                return;
 
             if (intent.getAction().equals(MusicService.BROADCAST_UPDATE_UI)) {
                 String songName = intent.getStringExtra("song");
@@ -188,8 +188,7 @@ public class PlayerActivity extends AppCompatActivity {
                             handleVoiceCommand(matches.get(0));
                         }
                     }
-                }
-        );
+                });
 
         mySongs = getIntent().getStringArrayListExtra("songs");
         position = getIntent().getIntExtra("pos", 0);
@@ -220,7 +219,8 @@ public class PlayerActivity extends AppCompatActivity {
         Intent bindIntent = new Intent(this, MusicService.class);
         bindService(bindIntent, serviceConnection, Context.BIND_AUTO_CREATE);
 
-        attachPressAnimation(btnPlay, btnNext, btnPrev, btnShuffle, btnRepeat, btnFav, btnQueue, btnEq, btnBack, btnMic);
+        attachPressAnimation(btnPlay, btnNext, btnPrev, btnShuffle, btnRepeat, btnFav, btnQueue, btnEq, btnBack,
+                btnMic);
         setupAlbumArtSwipe();
 
         btnPlay.setOnClickListener(v -> triggerPlayPause());
@@ -295,7 +295,8 @@ public class PlayerActivity extends AppCompatActivity {
     }
 
     private void syncFromService() {
-        if (!isBound || musicService == null) return;
+        if (!isBound || musicService == null)
+            return;
 
         if (shuffleToggledBeforeBind) {
             musicService.setShuffle(isShuffle);
@@ -413,7 +414,8 @@ public class PlayerActivity extends AppCompatActivity {
     }
 
     private void handleVoiceCommand(String rawCommand) {
-        if (rawCommand == null) return;
+        if (rawCommand == null)
+            return;
         String cmd = rawCommand.trim().toLowerCase(Locale.ROOT);
         if (cmd.contains("pause") || cmd.contains("stop")) {
             if (isBound && musicService != null && musicService.isPlaying()) {
@@ -440,7 +442,8 @@ public class PlayerActivity extends AppCompatActivity {
 
     @SuppressLint("ClickableViewAccessibility")
     private void setupAlbumArtSwipe() {
-        if (imgViewCard == null) return;
+        if (imgViewCard == null)
+            return;
         GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             private static final int SWIPE_THRESHOLD = 90;
             private static final int SWIPE_VELOCITY_THRESHOLD = 150;
@@ -452,7 +455,8 @@ public class PlayerActivity extends AppCompatActivity {
 
             @Override
             public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-                if (e1 == null || e2 == null) return false;
+                if (e1 == null || e2 == null)
+                    return false;
                 float diffX = e2.getX() - e1.getX();
                 float diffY = e2.getY() - e1.getY();
                 if (Math.abs(diffX) > Math.abs(diffY)
@@ -474,7 +478,10 @@ public class PlayerActivity extends AppCompatActivity {
 
     private void animateSwipeAndSkip(boolean next) {
         if (imgViewCard == null) {
-            if (next) triggerNext(); else triggerPrev();
+            if (next)
+                triggerNext();
+            else
+                triggerPrev();
             return;
         }
         float outX = next ? -90f : 90f;
@@ -485,8 +492,12 @@ public class PlayerActivity extends AppCompatActivity {
                 .alpha(0.35f)
                 .setDuration(100)
                 .withEndAction(() -> {
-                    if (isFinishing() || isDestroyed()) return;
-                    if (next) triggerNext(); else triggerPrev();
+                    if (isFinishing() || isDestroyed())
+                        return;
+                    if (next)
+                        triggerNext();
+                    else
+                        triggerPrev();
                     imgViewCard.setTranslationX(inX);
                     imgViewCard.animate()
                             .translationX(0f)
@@ -519,7 +530,8 @@ public class PlayerActivity extends AppCompatActivity {
     }
 
     private void popView(View view) {
-        if (view == null) return;
+        if (view == null)
+            return;
         view.animate().cancel();
         view.setScaleX(0.88f);
         view.setScaleY(0.88f);
@@ -532,13 +544,15 @@ public class PlayerActivity extends AppCompatActivity {
     }
 
     private void updateToggleButton(ImageButton button, boolean enabled) {
-        if (button == null) return;
+        if (button == null)
+            return;
         button.setAlpha(enabled ? 1.0f : 0.5f);
         ImageViewCompat.setImageTintList(button, ColorStateList.valueOf(enabled ? COLOR_ACCENT : COLOR_WHITE));
     }
 
     private void setSongTitle(String title) {
-        if (title == null) return;
+        if (title == null)
+            return;
         if (!title.equals(txtSong.getText().toString())) {
             txtSong.setText(title);
             txtSong.setSelected(true);
@@ -623,11 +637,12 @@ public class PlayerActivity extends AppCompatActivity {
     }
 
     private void updateFavIcon(boolean animate) {
-        if (btnFav == null) return;
+        if (btnFav == null)
+            return;
         boolean fav = currentSongPath != null && favManager != null && favManager.isFavourite(currentSongPath);
-        btnFav.setImageResource(R.drawable.ic_fav);
+        btnFav.setImageResource(fav ? R.drawable.ic_fav_filled : R.drawable.ic_fav);
         btnFav.setAlpha(fav ? 1.0f : 0.5f);
-        ImageViewCompat.setImageTintList(btnFav, ColorStateList.valueOf(fav ? COLOR_FAV_ACTIVE : COLOR_WHITE));
+        ImageViewCompat.setImageTintList(btnFav, ColorStateList.valueOf(fav ? COLOR_ACCENT : COLOR_WHITE));
         if (animate) {
             popView(btnFav);
         }
