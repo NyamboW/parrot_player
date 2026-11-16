@@ -3,16 +3,21 @@ package com.example.parrot;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
+import android.media.PlaybackParams;
 import android.net.Uri;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
@@ -73,7 +78,17 @@ public class MusicService extends Service {
     private int restoredSeekPosition = 0;
     private int restoredDuration = 0;
 
+    private float playbackSpeed = 1.0f;
+    private int crossfadeSeconds = 0;
+    private boolean skipSilence = false;
+    private long sleepTimerEndElapsedMs = 0L;
+    private MediaPlayer fadingOutPlayer;
+    private boolean crossfadeTriggered = false;
+    private boolean incomingFadeIn = false;
+    private BroadcastReceiver audioDeviceReceiver;
+
     private static final long STATE_SAVE_INTERVAL_MS = 3000L;
+    private static final long TRANSITION_POLL_INTERVAL_MS = 250L;
     private final Handler stateHandler = new Handler(Looper.getMainLooper());
     private final Runnable periodicStateSaveRunnable = new Runnable() {
         @Override
@@ -81,6 +96,41 @@ public class MusicService extends Service {
             if (isPlaying()) {
                 saveCurrentState(false);
                 stateHandler.postDelayed(this, STATE_SAVE_INTERVAL_MS);
+            }
+        }
+    };
+    private final Runnable transitionMonitorRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isPlaying()) {
+                checkTrackTransition();
+                stateHandler.postDelayed(this, TRANSITION_POLL_INTERVAL_MS);
+            }
+        }
+    };
+    private final Runnable sleepTimerRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (sleepTimerEndElapsedMs <= 0L) return;
+            long remaining = sleepTimerEndElapsedMs - SystemClock.elapsedRealtime();
+            if (remaining <= 0L) {
+                sleepTimerEndElapsedMs = 0L;
+                if (mediaPlayer != null && isPrepared) {
+                    if (mediaPlayer.isPlaying()) {
+                        togglePlay();
+                    }
+                    try {
+                        mediaPlayer.setVolume(1.0f, 1.0f);
+                    } catch (Exception ignored) {}
+                }
+            } else {
+                if (remaining <= 3000L && mediaPlayer != null && isPrepared && mediaPlayer.isPlaying()) {
+                    float vol = Math.max(0.08f, remaining / 3000f);
+                    try {
+                        mediaPlayer.setVolume(vol, vol);
+                    } catch (Exception ignored) {}
+                }
+                stateHandler.postDelayed(this, 500L);
             }
         }
     };
@@ -99,7 +149,9 @@ public class MusicService extends Service {
     public void onCreate() {
         super.onCreate();
         stateManager = new PlayerStateManager(this);
+        loadPlaybackPreferences();
         restoreSavedState();
+        registerAudioDeviceReceiver();
         
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         audioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
@@ -111,6 +163,7 @@ public class MusicService extends Service {
                     case AudioManager.AUDIOFOCUS_GAIN:
                         if (!mediaPlayer.isPlaying()) {
                             mediaPlayer.start();
+                            applyPlaybackSpeed();
                             startPeriodicStateSave();
                             updateMediaSession();
                             showNotification(R.drawable.ic_pause);
@@ -290,6 +343,9 @@ public class MusicService extends Service {
         safeRelease();
         final int token = ++playToken;
         isPrepared = false;
+        crossfadeTriggered = false;
+        final boolean shouldFadeIn = incomingFadeIn && crossfadeSeconds > 0;
+        incomingFadeIn = false;
         restoredSeekPosition = Math.max(0, initialSeekMs);
 
         MediaPlayer mp = new MediaPlayer();
@@ -306,15 +362,29 @@ public class MusicService extends Service {
                 setupEqualizer();
 
                 int duration = preparedMp.getDuration();
-                if (initialSeekMs > 0 && duration > 0 && initialSeekMs < duration) {
-                    preparedMp.seekTo(initialSeekMs);
+                int targetSeek = initialSeekMs;
+                if (targetSeek == 0 && skipSilence && duration > 15000) {
+                    targetSeek = 350;
+                }
+                if (targetSeek > 0 && duration > 0 && targetSeek < duration) {
+                    preparedMp.seekTo(targetSeek);
                 }
                 restoredSeekPosition = 0;
                 restoredDuration = Math.max(0, duration);
 
+                if (shouldFadeIn) {
+                    preparedMp.setVolume(0.08f, 0.08f);
+                } else {
+                    preparedMp.setVolume(1.0f, 1.0f);
+                }
+
                 int result = AudioManagerCompat.requestAudioFocus(audioManager, audioFocusRequest);
                 if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
                     preparedMp.start();
+                    applyPlaybackSpeed();
+                    if (shouldFadeIn) {
+                        startVolumeRampIn(preparedMp, token, crossfadeSeconds * 1000L);
+                    }
                     startPeriodicStateSave();
                 }
                 updateMediaSession();
@@ -414,7 +484,9 @@ public class MusicService extends Service {
         } else {
             int result = AudioManagerCompat.requestAudioFocus(audioManager, audioFocusRequest);
             if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                mediaPlayer.setVolume(1.0f, 1.0f);
                 mediaPlayer.start();
+                applyPlaybackSpeed();
                 startPeriodicStateSave();
                 saveCurrentState(false);
                 updateMediaSession();
@@ -846,15 +918,192 @@ public class MusicService extends Service {
     private void startPeriodicStateSave() {
         stopPeriodicStateSave();
         stateHandler.postDelayed(periodicStateSaveRunnable, STATE_SAVE_INTERVAL_MS);
+        stateHandler.postDelayed(transitionMonitorRunnable, TRANSITION_POLL_INTERVAL_MS);
     }
 
     private void stopPeriodicStateSave() {
         stateHandler.removeCallbacks(periodicStateSaveRunnable);
+        stateHandler.removeCallbacks(transitionMonitorRunnable);
+    }
+
+    private void loadPlaybackPreferences() {
+        SharedPreferences prefs = getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE);
+        playbackSpeed = Math.max(0.5f, Math.min(2.0f, prefs.getFloat(SettingsFragment.KEY_PLAYBACK_SPEED, 1.0f)));
+        crossfadeSeconds = Math.max(0, Math.min(12, prefs.getInt(SettingsFragment.KEY_CROSSFADE_SECONDS, 0)));
+        skipSilence = prefs.getBoolean(SettingsFragment.KEY_SKIP_SILENCE, false);
+    }
+
+    public void setPlaybackSpeed(float speed) {
+        playbackSpeed = Math.max(0.5f, Math.min(2.0f, speed));
+        if (isPlaying()) {
+            applyPlaybackSpeed();
+        }
+    }
+
+    private void applyPlaybackSpeed() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && mediaPlayer != null && isPrepared) {
+            try {
+                if (mediaPlayer.isPlaying()) {
+                    PlaybackParams params = mediaPlayer.getPlaybackParams();
+                    if (params == null) {
+                        params = new PlaybackParams();
+                    }
+                    params.setSpeed(playbackSpeed);
+                    mediaPlayer.setPlaybackParams(params);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    public void setCrossfadeSeconds(int seconds) {
+        crossfadeSeconds = Math.max(0, Math.min(12, seconds));
+    }
+
+    public void setSkipSilence(boolean enabled) {
+        skipSilence = enabled;
+    }
+
+    public void setSleepTimerMinutes(int minutes) {
+        stateHandler.removeCallbacks(sleepTimerRunnable);
+        if (minutes <= 0) {
+            sleepTimerEndElapsedMs = 0L;
+            if (mediaPlayer != null && isPrepared) {
+                try {
+                    mediaPlayer.setVolume(1.0f, 1.0f);
+                } catch (Exception ignored) {}
+            }
+            return;
+        }
+        sleepTimerEndElapsedMs = SystemClock.elapsedRealtime() + minutes * 60_000L;
+        stateHandler.postDelayed(sleepTimerRunnable, 500L);
+    }
+
+    public long getSleepTimerRemainingMs() {
+        if (sleepTimerEndElapsedMs <= 0L) return 0L;
+        long remaining = sleepTimerEndElapsedMs - SystemClock.elapsedRealtime();
+        return Math.max(0L, remaining);
+    }
+
+    private void checkTrackTransition() {
+        if (mediaPlayer == null || !isPrepared || isRepeat || crossfadeTriggered) return;
+        int duration = getDuration();
+        int currentPos = getCurrentPosition();
+        if (duration <= 6000 || currentPos <= 1000) return;
+
+        int remaining = duration - currentPos;
+        if (crossfadeSeconds > 0 && duration > (crossfadeSeconds * 1000 + 3000)) {
+            if (remaining <= crossfadeSeconds * 1000) {
+                crossfadeTriggered = true;
+                triggerCrossfadeToNext();
+            }
+        } else if (skipSilence && remaining <= 550) {
+            crossfadeTriggered = true;
+            nextSong();
+        }
+    }
+
+    private void triggerCrossfadeToNext() {
+        releaseFadingOutPlayer();
+        if (mediaPlayer != null && isPrepared) {
+            final MediaPlayer outgoing = mediaPlayer;
+            fadingOutPlayer = outgoing;
+            mediaPlayer = null;
+            isPrepared = false;
+            playToken++;
+            try {
+                outgoing.setOnCompletionListener(null);
+                outgoing.setOnErrorListener(null);
+            } catch (Exception ignored) {}
+
+            final int steps = 16;
+            final long stepDelay = Math.max(40L, (crossfadeSeconds * 1000L) / steps);
+            for (int i = 1; i <= steps; i++) {
+                final int step = i;
+                stateHandler.postDelayed(() -> {
+                    if (fadingOutPlayer != outgoing) return;
+                    if (step == steps) {
+                        releaseFadingOutPlayer();
+                    } else {
+                        float vol = Math.max(0f, 1f - (step / (float) steps));
+                        try {
+                            outgoing.setVolume(vol, vol);
+                        } catch (Exception ignored) {}
+                    }
+                }, stepDelay * i);
+            }
+        }
+        incomingFadeIn = true;
+        nextSong();
+    }
+
+    private void startVolumeRampIn(final MediaPlayer mp, final int token, long durationMs) {
+        final int steps = 16;
+        final long stepDelay = Math.max(40L, durationMs / steps);
+        for (int i = 1; i <= steps; i++) {
+            final int step = i;
+            stateHandler.postDelayed(() -> {
+                if (token != playToken || mp != mediaPlayer || !isPrepared) return;
+                float vol = Math.min(1f, step / (float) steps);
+                try {
+                    mp.setVolume(vol, vol);
+                } catch (Exception ignored) {}
+            }, stepDelay * i);
+        }
+    }
+
+    private void releaseFadingOutPlayer() {
+        if (fadingOutPlayer != null) {
+            try {
+                if (fadingOutPlayer.isPlaying()) {
+                    fadingOutPlayer.stop();
+                }
+            } catch (Exception ignored) {
+            } finally {
+                try {
+                    fadingOutPlayer.release();
+                } catch (Exception ignored) {}
+                fadingOutPlayer = null;
+            }
+        }
+    }
+
+    private void registerAudioDeviceReceiver() {
+        audioDeviceReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (intent == null || intent.getAction() == null) return;
+                SharedPreferences prefs = getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE);
+                if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())) {
+                    boolean pauseOnUnplug = prefs.getBoolean(SettingsFragment.KEY_PAUSE_ON_UNPLUG, true);
+                    if (pauseOnUnplug && isPlaying()) {
+                        togglePlay();
+                    }
+                } else if (Intent.ACTION_HEADSET_PLUG.equals(intent.getAction())) {
+                    if (isInitialStickyBroadcast()) return;
+                    int state = intent.getIntExtra("state", -1);
+                    boolean resumeOnConnect = prefs.getBoolean(SettingsFragment.KEY_RESUME_ON_HEADSET, false);
+                    if (state == 1 && resumeOnConnect && mediaPlayer != null && isPrepared && !isPlaying()) {
+                        togglePlay();
+                    }
+                }
+            }
+        };
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+        filter.addAction(Intent.ACTION_HEADSET_PLUG);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(audioDeviceReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(audioDeviceReceiver, filter);
+        }
     }
 
     private void closePlayerService() {
         stopPeriodicStateSave();
+        stateHandler.removeCallbacks(sleepTimerRunnable);
         saveCurrentState(true);
+        releaseFadingOutPlayer();
         safeRelease();
         stopForeground(true);
         stopSelf();
@@ -872,7 +1121,14 @@ public class MusicService extends Service {
     public void onDestroy() {
         super.onDestroy();
         stopPeriodicStateSave();
+        stateHandler.removeCallbacks(sleepTimerRunnable);
+        if (audioDeviceReceiver != null) {
+            try {
+                unregisterReceiver(audioDeviceReceiver);
+            } catch (Exception ignored) {}
+        }
         saveCurrentState(true);
+        releaseFadingOutPlayer();
         safeRelease();
         if (mediaSession != null) {
             mediaSession.release();
