@@ -390,7 +390,6 @@ public class Music_Fragment extends Fragment {
             public View getView(int i, View view, ViewGroup parent) {
 
                 View v = getLayoutInflater().inflate(R.layout.list_items, null);
-                View rowContainer = v.findViewById(R.id.songRowContainer);
                 TextView txt = v.findViewById(R.id.txtSong);
                 TextView txtArtist = v.findViewById(R.id.txtartist);
                 ImageView img = v.findViewById(R.id.songImg);
@@ -403,12 +402,6 @@ public class Music_Fragment extends Fragment {
                 }
 
                 boolean isChecked = isMultiSelectMode && listView.isItemChecked(i);
-                if (rowContainer != null) {
-                    rowContainer.setActivated(isChecked);
-                }
-                txt.setTextColor(isChecked
-                        ? android.graphics.Color.parseColor("#4CAF50")
-                        : android.graphics.Color.parseColor("#FAF8F8"));
                 if (isMultiSelectMode) {
                     if (btnMore != null) btnMore.setVisibility(View.GONE);
                     if (imgCheckMark != null) {
