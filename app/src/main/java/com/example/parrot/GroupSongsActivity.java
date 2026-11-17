@@ -66,6 +66,7 @@ public class GroupSongsActivity extends AppCompatActivity {
     private String groupType;
     private String groupName;
     private ActivityResultLauncher<Intent> documentTreeLauncher;
+    private SongDeletionHelper songDeletionHelper;
 
     private final BroadcastReceiver playbackStateReceiver = new BroadcastReceiver() {
         @Override
@@ -135,6 +136,7 @@ public class GroupSongsActivity extends AppCompatActivity {
                     }
                 }
         );
+        songDeletionHelper = SongDeletionHelper.forActivity(this);
 
         View.OnClickListener importFolderListener = v -> PermissionHelper.ensurePermissions(
                 GroupSongsActivity.this,
@@ -321,29 +323,14 @@ public class GroupSongsActivity extends AppCompatActivity {
                         mode.finish();
                         return true;
                     }
-                    new AlertDialog.Builder(GroupSongsActivity.this)
-                            .setTitle("Delete Songs")
-                            .setMessage("Are you sure you want to delete " + selectedPaths.size() + " songs?")
-                            .setPositiveButton("Yes", (dialog, which) -> {
-                                int deletedCount = 0;
-                                for (String path : selectedPaths) {
-                                    File file = new File(path);
-                                    if (file.exists() && file.delete()) {
-                                        getContentResolver().delete(
-                                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                                MediaStore.Audio.Media.DATA + "=?", new String[]{path});
-                                        if (favManager.isFavourite(path)) {
-                                            favManager.removeFavourite(path);
-                                        }
-                                        deletedCount++;
-                                    }
-                                }
-                                Toast.makeText(GroupSongsActivity.this, deletedCount + " songs deleted", Toast.LENGTH_SHORT).show();
+                    mode.finish();
+                    if (songDeletionHelper != null) {
+                        songDeletionHelper.deleteSongs(selectedPaths, () -> {
+                            if (!isFinishing() && !isDestroyed()) {
                                 loadGroupSongs(groupType, groupName);
-                                mode.finish();
-                            })
-                            .setNegativeButton("No", null)
-                            .show();
+                            }
+                        });
+                    }
                     return true;
                 }
                 return false;
@@ -809,11 +796,19 @@ public class GroupSongsActivity extends AppCompatActivity {
                             } else if (item.getItemId() == R.id.action_add_to_playlist) {
                                 showAddToPlaylistDialog(path);
                                 return true;
-                            } else if (item.getItemId() == R.id.action_delete && "playlist".equals(groupType)) {
-                                PlaylistManager pm = new PlaylistManager(GroupSongsActivity.this);
-                                pm.removeSongFromPlaylist(groupName, path);
-                                loadGroupSongs(groupType, groupName);
-                                Toast.makeText(GroupSongsActivity.this, "Removed from " + groupName, Toast.LENGTH_SHORT).show();
+                            } else if (item.getItemId() == R.id.action_delete) {
+                                if ("playlist".equals(groupType)) {
+                                    PlaylistManager pm = new PlaylistManager(GroupSongsActivity.this);
+                                    pm.removeSongFromPlaylist(groupName, path);
+                                    loadGroupSongs(groupType, groupName);
+                                    Toast.makeText(GroupSongsActivity.this, "Removed from " + groupName, Toast.LENGTH_SHORT).show();
+                                } else if (songDeletionHelper != null) {
+                                    songDeletionHelper.deleteSong(path, () -> {
+                                        if (!isFinishing() && !isDestroyed()) {
+                                            loadGroupSongs(groupType, groupName);
+                                        }
+                                    });
+                                }
                                 return true;
                             }
                             return false;

@@ -938,6 +938,62 @@ public class MusicService extends Service {
         broadcastQueueUpdate();
     }
 
+    public void onSongsDeletedFromStorage(java.util.List<String> deletedPaths) {
+        if (deletedPaths == null || deletedPaths.isEmpty()) return;
+
+        // Remove from Up Next queue
+        ArrayList<String> queue = queueManager.getQueue();
+        boolean queueChanged = false;
+        for (int i = queue.size() - 1; i >= 0; i--) {
+            if (deletedPaths.contains(queue.get(i))) {
+                queueManager.removeFromQueue(i);
+                queueChanged = true;
+            }
+        }
+        if (queueChanged) {
+            broadcastQueueUpdate();
+        }
+
+        // Remove from active playlist
+        if (mySongs != null && !mySongs.isEmpty()) {
+            String currentPath = getCurrentSongPath();
+            boolean currentDeleted = currentPath != null && deletedPaths.contains(currentPath);
+            boolean wasPlaying = isPlaying();
+
+            for (int i = mySongs.size() - 1; i >= 0; i--) {
+                if (deletedPaths.contains(mySongs.get(i))) {
+                    mySongs.remove(i);
+                    if (i < position) {
+                        position = Math.max(0, position - 1);
+                    }
+                }
+            }
+
+            if (stateManager != null) {
+                stateManager.savePlaylist(mySongs);
+            }
+
+            if (mySongs.isEmpty()) {
+                activeSongPath = null;
+                activeIsPlaying = false;
+                safeRelease();
+                stopForeground(true);
+            } else if (currentDeleted) {
+                if (position >= mySongs.size()) {
+                    position = 0;
+                }
+                if (wasPlaying) {
+                    playSong(position);
+                } else {
+                    safeRelease();
+                    activeSongPath = getCurrentSongPath();
+                    activeIsPlaying = false;
+                    broadcastUIUpdate();
+                }
+            }
+        }
+    }
+
     private void restoreSavedState() {
         if (stateManager == null) return;
         PlayerStateManager.RestoredState restored = stateManager.restore();

@@ -51,6 +51,45 @@ public final class PermissionHelper {
     }
 
     /**
+     * Ensures permissions required to delete audio files are granted across API 21-35.
+     */
+    public static void ensureDeletePermissions(Context context, Runnable onGranted) {
+        if (context == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
+            boolean hasRead = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_GRANTED;
+            boolean hasWrite = ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_GRANTED;
+            if (!hasRead || !hasWrite) {
+                Dexter.withContext(context)
+                        .withPermissions(
+                                Manifest.permission.READ_EXTERNAL_STORAGE,
+                                Manifest.permission.WRITE_EXTERNAL_STORAGE
+                        )
+                        .withListener(new MultiplePermissionsListener() {
+                            @Override
+                            public void onPermissionsChecked(MultiplePermissionsReport report) {
+                                if (report != null && report.areAllPermissionsGranted()) {
+                                    if (onGranted != null) onGranted.run();
+                                } else if (report != null && report.isAnyPermissionPermanentlyDenied()) {
+                                    showPermissionSettingsDialog(context);
+                                }
+                            }
+
+                            @Override
+                            public void onPermissionRationaleShouldBeShown(
+                                    List<PermissionRequest> list, PermissionToken token) {
+                                token.continuePermissionRequest();
+                            }
+                        }).check();
+                return;
+            }
+        }
+        ensurePermissions(context, onGranted);
+    }
+
+    /**
      * Requests the appropriate audio/storage and notification permissions for the current Android version.
      */
     public static void ensurePermissions(Context context, Runnable onAudioGranted) {

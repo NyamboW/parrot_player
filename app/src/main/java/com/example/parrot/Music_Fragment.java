@@ -74,6 +74,7 @@ public class Music_Fragment extends Fragment {
     private BaseAdapter songsAdapter;
     private boolean isMultiSelectMode = false;
     private boolean permissionGranted = false;
+    private SongDeletionHelper songDeletionHelper;
 
     private final BroadcastReceiver playbackStateReceiver = new BroadcastReceiver() {
         @Override
@@ -94,6 +95,7 @@ public class Music_Fragment extends Fragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
+        songDeletionHelper = SongDeletionHelper.forFragment(this);
     }
 
     @Override
@@ -236,29 +238,12 @@ public class Music_Fragment extends Fragment {
                     mode.finish();
                     return true;
                 } else if (id == R.id.action_delete) {
-                    new AlertDialog.Builder(requireContext())
-                        .setTitle("Delete Songs")
-                        .setMessage("Are you sure you want to delete " + selectedPaths.size() + " songs?")
-                        .setPositiveButton("Yes", (dialog, which) -> {
-                            int deletedCount = 0;
-                            for (String path : selectedPaths) {
-                                File file = new File(path);
-                                if (file.exists() && file.delete()) {
-                                    requireContext().getContentResolver().delete(
-                                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, 
-                                        MediaStore.Audio.Media.DATA + "=?", new String[]{path});
-                                    if (favManager.isFavourite(path)) {
-                                        favManager.removeFavourite(path);
-                                    }
-                                    deletedCount++;
-                                }
-                            }
-                            Toast.makeText(getContext(), deletedCount + " songs deleted", Toast.LENGTH_SHORT).show();
-                            loadSongs();
-                            mode.finish();
-                        })
-                        .setNegativeButton("No", null)
-                        .show();
+                    mode.finish();
+                    if (songDeletionHelper != null) {
+                        songDeletionHelper.deleteSongs(selectedPaths, () -> {
+                            if (isAdded()) loadSongs();
+                        });
+                    }
                     return true;
                 }
                 return false;
@@ -522,23 +507,10 @@ public class Music_Fragment extends Fragment {
     }
 
     private void deleteSong(String path) {
-        File file = new File(path);
-        try {
-            if (file.exists() && file.delete()) {
-                requireContext().getContentResolver().delete(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, 
-                    MediaStore.Audio.Media.DATA + "=?", new String[]{path});
-                Toast.makeText(getContext(), "Deleted", Toast.LENGTH_SHORT).show();
-                
-                if (favManager.isFavourite(path)) {
-                    favManager.removeFavourite(path);
-                }
-                
-                loadSongs();
-            } else {
-                Toast.makeText(getContext(), "Failed to delete. May require permission.", Toast.LENGTH_SHORT).show();
-            }
-        } catch (Exception e) {
-            Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        if (songDeletionHelper != null) {
+            songDeletionHelper.deleteSong(path, () -> {
+                if (isAdded()) loadSongs();
+            });
         }
     }
 
