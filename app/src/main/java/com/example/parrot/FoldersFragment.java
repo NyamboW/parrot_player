@@ -1,9 +1,13 @@
 package com.example.parrot;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.LayoutInflater;
@@ -39,6 +43,15 @@ public class FoldersFragment extends Fragment {
     private ListView listView;
     private final ArrayList<FolderItem> folders = new ArrayList<>();
 
+    private final BroadcastReceiver libraryReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (isAdded()) {
+                loadFolders();
+            }
+        }
+    };
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
@@ -51,11 +64,28 @@ public class FoldersFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(PermissionHelper.ACTION_PERMISSIONS_GRANTED);
+        filter.addAction(MusicFolderHelper.ACTION_FOLDERS_UPDATED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requireContext().registerReceiver(libraryReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            requireContext().registerReceiver(libraryReceiver, filter);
+        }
         loadFolders();
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        try {
+            requireContext().unregisterReceiver(libraryReceiver);
+        } catch (Exception ignored) {}
     }
 
     private void loadFolders() {
         folders.clear();
+        if (!isAdded() || !PermissionHelper.hasAudioPermission(requireContext())) return;
         Map<String, FolderItem> folderMap = new LinkedHashMap<>();
 
         Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;

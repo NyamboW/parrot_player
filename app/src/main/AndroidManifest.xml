@@ -6,6 +6,9 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"/>
 
     <!-- Android 13+ -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
@@ -24,6 +27,7 @@
         android:allowBackup="true"
         android:icon="@drawable/theicon"
         android:label="@string/app_name"
+        android:requestLegacyExternalStorage="true"
         android:roundIcon="@drawable/theicon"
         android:supportsRtl="true"
         android:theme="@style/ParrotNoActionBar">

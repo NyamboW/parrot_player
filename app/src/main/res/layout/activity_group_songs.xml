@@ -19,6 +19,189 @@
         android:layout_height="1dp"
         android:background="#1B202A" />
 
+    <!-- Top Action Bar for Non-Empty Playlists -->
+    <LinearLayout
+        android:id="@+id/layoutPlaylistTopActions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="14dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="6dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/btnTopImportFolder"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:layout_marginEnd="10dp"
+            android:background="@drawable/card_create_playlist_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingEnd="14dp">
+
+            <ImageView
+                android:id="@+id/imgTopImportFolder"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_folder_music"
+                app:tint="#4CAF50" />
+
+            <TextView
+                android:id="@+id/txtTopImportFolder"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:fontFamily="sans-serif-medium"
+                android:text="Import from Folder"
+                android:textColor="#4CAF50"
+                android:textSize="12.5sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnTopAddSongs"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:background="@drawable/card_surface_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingEnd="14dp">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_nav_playlist_add"
+                app:tint="#D5DCE6" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:fontFamily="sans-serif-medium"
+                android:text="Add Songs"
+                android:textColor="#D5DCE6"
+                android:textSize="12.5sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Empty Playlist View (AIMP-style Import from Folder) -->
+    <LinearLayout
+        android:id="@+id/layoutPlaylistEmpty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="28dp"
+        android:visibility="gone">
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/emptyPlaylistIconCard"
+            android:layout_width="76dp"
+            android:layout_height="76dp"
+            app:cardBackgroundColor="#161A24"
+            app:cardCornerRadius="22dp"
+            app:cardElevation="0dp">
+
+            <ImageView
+                android:id="@+id/imgEmptyPlaylistIcon"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="20dp"
+                android:src="@drawable/ic_folder_music"
+                app:tint="#4CAF50" />
+        </androidx.cardview.widget.CardView>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:fontFamily="sans-serif-medium"
+            android:text="This Playlist is Empty"
+            android:textColor="#F5F7FA"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:lineSpacingExtra="3dp"
+            android:text="Import all music from a folder or select individual tracks from your library."
+            android:textColor="#8A93A2"
+            android:textSize="13.5sp" />
+
+        <LinearLayout
+            android:id="@+id/btnEmptyImportFolder"
+            android:layout_width="230dp"
+            android:layout_height="46dp"
+            android:layout_marginTop="24dp"
+            android:background="@drawable/card_create_playlist_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp">
+
+            <ImageView
+                android:id="@+id/imgEmptyImportFolderBtn"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_folder_music"
+                app:tint="#4CAF50" />
+
+            <TextView
+                android:id="@+id/txtEmptyImportFolderBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:fontFamily="sans-serif-medium"
+                android:text="Import from Folder"
+                android:textColor="#4CAF50"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnEmptyAddSongs"
+            android:layout_width="230dp"
+            android:layout_height="44dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_surface_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_nav_playlist_add"
+                app:tint="#D5DCE6" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:fontFamily="sans-serif-medium"
+                android:text="Select Songs"
+                android:textColor="#D5DCE6"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </LinearLayout>
+
     <ListView
         android:id="@+id/listViewGroupSongs"
         android:layout_width="match_parent"

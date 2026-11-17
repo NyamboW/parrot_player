@@ -78,7 +78,13 @@ public class Music_Fragment extends Fragment {
     private final BroadcastReceiver playbackStateReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (songsAdapter != null && isAdded()) {
+            if (!isAdded() || intent == null || intent.getAction() == null) return;
+            String action = intent.getAction();
+            if (PermissionHelper.ACTION_PERMISSIONS_GRANTED.equals(action)
+                    || MusicFolderHelper.ACTION_FOLDERS_UPDATED.equals(action)) {
+                permissionGranted = true;
+                loadSongs();
+            } else if (songsAdapter != null) {
                 songsAdapter.notifyDataSetChanged();
             }
         }
@@ -120,12 +126,15 @@ public class Music_Fragment extends Fragment {
         IntentFilter filter = new IntentFilter();
         filter.addAction(MusicService.BROADCAST_UPDATE_UI);
         filter.addAction(AccentColorHelper.ACTION_ACCENT_COLOR_CHANGED);
+        filter.addAction(PermissionHelper.ACTION_PERMISSIONS_GRANTED);
+        filter.addAction(MusicFolderHelper.ACTION_FOLDERS_UPDATED);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requireContext().registerReceiver(playbackStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
             requireContext().registerReceiver(playbackStateReceiver, filter);
         }
-        if (permissionGranted) {
+        if (PermissionHelper.hasAudioPermission(requireContext())) {
+            permissionGranted = true;
             loadSongs();
         }
     }
@@ -266,58 +275,20 @@ public class Music_Fragment extends Fragment {
     }
 
     private void requestPermission() {
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-
-            Dexter.withContext(requireContext())
-                    .withPermissions(Manifest.permission.READ_MEDIA_AUDIO)
-                    .withListener(new MultiplePermissionsListener() {
-                        @Override
-                        public void onPermissionsChecked(MultiplePermissionsReport report) {
-                            if (isAdded()) {
-                                permissionGranted = true;
-                                loadSongs();
-                                MusicFolderHelper.promptIfNotConfigured(requireContext(), () -> {
-                                    if (isAdded()) loadSongs();
-                                });
-                            }
-                        }
-
-                        @Override
-                        public void onPermissionRationaleShouldBeShown(
-                                java.util.List<PermissionRequest> list,
-                                PermissionToken token) {
-                            token.continuePermissionRequest();
-                        }
-                    }).check();
-
-        } else {
-
-            Dexter.withContext(requireContext())
-                    .withPermissions(Manifest.permission.READ_EXTERNAL_STORAGE)
-                    .withListener(new MultiplePermissionsListener() {
-                        @Override
-                        public void onPermissionsChecked(MultiplePermissionsReport report) {
-                            if (isAdded()) {
-                                permissionGranted = true;
-                                loadSongs();
-                                MusicFolderHelper.promptIfNotConfigured(requireContext(), () -> {
-                                    if (isAdded()) loadSongs();
-                                });
-                            }
-                        }
-
-                        @Override
-                        public void onPermissionRationaleShouldBeShown(
-                                java.util.List<PermissionRequest> list,
-                                PermissionToken token) {
-                            token.continuePermissionRequest();
-                        }
-                    }).check();
-        }
+        if (!isAdded()) return;
+        PermissionHelper.ensurePermissions(requireContext(), () -> {
+            if (isAdded()) {
+                permissionGranted = true;
+                loadSongs();
+                MusicFolderHelper.promptIfNotConfigured(requireContext(), () -> {
+                    if (isAdded()) loadSongs();
+                });
+            }
+        });
     }
 
     private void loadSongs() {
+        if (!isAdded() || !PermissionHelper.hasAudioPermission(requireContext())) return;
 
         songList.clear();
         ArrayList<String> artistList = new ArrayList<>();

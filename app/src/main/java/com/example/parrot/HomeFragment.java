@@ -45,7 +45,8 @@ public class HomeFragment extends Fragment {
             if (intent == null || intent.getAction() == null) return;
             if (AccentColorHelper.ACTION_ACCENT_COLOR_CHANGED.equals(intent.getAction())) {
                 applyAccentColor();
-            } else if (MusicFolderHelper.ACTION_FOLDERS_UPDATED.equals(intent.getAction())) {
+            } else if (MusicFolderHelper.ACTION_FOLDERS_UPDATED.equals(intent.getAction())
+                    || PermissionHelper.ACTION_PERMISSIONS_GRANTED.equals(intent.getAction())) {
                 refreshLibraryCount();
             }
         }
@@ -100,6 +101,7 @@ public class HomeFragment extends Fragment {
         IntentFilter filter = new IntentFilter();
         filter.addAction(AccentColorHelper.ACTION_ACCENT_COLOR_CHANGED);
         filter.addAction(MusicFolderHelper.ACTION_FOLDERS_UPDATED);
+        filter.addAction(PermissionHelper.ACTION_PERMISSIONS_GRANTED);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requireContext().registerReceiver(updateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
@@ -141,7 +143,7 @@ public class HomeFragment extends Fragment {
 
     private ArrayList<String> queryAllowedSongs() {
         ArrayList<String> songs = new ArrayList<>();
-        if (!isAdded()) return songs;
+        if (!isAdded() || !PermissionHelper.hasAudioPermission(requireContext())) return songs;
         try {
             Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
             String selection = MediaStore.Audio.Media.IS_MUSIC + "!=0";
