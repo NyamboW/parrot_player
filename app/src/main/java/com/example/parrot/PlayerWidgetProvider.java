@@ -5,13 +5,15 @@ import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.widget.RemoteViews;
+
+import java.io.File;
 
 public class PlayerWidgetProvider extends AppWidgetProvider {
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
-        // There may be multiple widgets active, so update all of them
         for (int appWidgetId : appWidgetIds) {
             updateAppWidget(context, appWidgetManager, appWidgetId);
         }
@@ -38,42 +40,65 @@ public class PlayerWidgetProvider extends AppWidgetProvider {
         PendingIntent prevPendingIntent = getSafePendingIntent(context, 2, prevIntent);
         views.setOnClickPendingIntent(R.id.widgetPrev, prevPendingIntent);
 
-        // Open App on click of background or song name
-        Intent openAppIntent = new Intent(context, MainActivity.class);
-        PendingIntent openAppPendingIntent = PendingIntent.getActivity(
-                context, 3, openAppIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        views.setOnClickPendingIntent(R.id.widgetSongName, openAppPendingIntent);
-        
+        // Open PlayerActivity when clicking the widget background, album art, or song title
+        Intent openPlayerIntent = new Intent(context, PlayerActivity.class);
+        openPlayerIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent openPlayerPendingIntent = PendingIntent.getActivity(
+                context,
+                3,
+                openPlayerIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        views.setOnClickPendingIntent(R.id.widgetRoot, openPlayerPendingIntent);
+        views.setOnClickPendingIntent(R.id.widgetAlbumArt, openPlayerPendingIntent);
+        views.setOnClickPendingIntent(R.id.widgetSongName, openPlayerPendingIntent);
+
         return views;
     }
-    
+
     private static PendingIntent getSafePendingIntent(Context context, int requestCode, Intent intent) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            return PendingIntent.getForegroundService(context, requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            return PendingIntent.getForegroundService(
+                    context,
+                    requestCode,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
         } else {
-            return PendingIntent.getService(context, requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            return PendingIntent.getService(
+                    context,
+                    requestCode,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
         }
     }
 
-    static void updateAppWidget(Context context, AppWidgetManager appWidgetManager,
-                                int appWidgetId) {
-
+    static void updateAppWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
         RemoteViews views = getWidgetViews(context);
 
-        // Request current state from service so widget is populated
+        // Pre-populate from saved player state so the widget doesn't reset to "No song playing"
+        PlayerStateManager.RestoredState restored = new PlayerStateManager(context).restore();
+        if (restored.hasValidSong()) {
+            String path = restored.songs.get(restored.position);
+            String name = new File(path).getName().replaceAll("(?i)\\.(mp3|wav|m4a|flac|ogg|aac)$", "");
+            views.setTextViewText(R.id.widgetSongName, name);
+            Bitmap cached = AlbumArtLoader.getInstance().getBestCachedArt(path);
+            if (cached != null) {
+                views.setImageViewBitmap(R.id.widgetAlbumArt, cached);
+            }
+        }
+
+        appWidgetManager.updateAppWidget(appWidgetId, views);
+
+        // Request live state update if MusicService can be started/queried
         Intent updateIntent = new Intent(context, MusicService.class);
         updateIntent.setAction(MusicService.ACTION_REQUEST_UPDATE);
         try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                context.startForegroundService(updateIntent);
-            } else {
-                context.startService(updateIntent);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+            context.startService(updateIntent);
+        } catch (Exception ignored) {
         }
-
-        // Instruct the widget manager to update the widget
-        appWidgetManager.updateAppWidget(appWidgetId, views);
     }
 }

@@ -279,7 +279,7 @@ public class PlayerActivity extends AppCompatActivity {
             }
         });
 
-        btnBack.setOnClickListener(v -> finish());
+        btnBack.setOnClickListener(v -> navigateBackFromPlayer());
 
         btnQueue.setOnClickListener(v -> {
             QueueBottomSheetFragment queueSheet = new QueueBottomSheetFragment();
@@ -734,9 +734,16 @@ public class PlayerActivity extends AppCompatActivity {
         unregisterReceiver(updateReceiver);
     }
 
+    private void navigateBackFromPlayer() {
+        if (isTaskRoot()) {
+            startActivity(new Intent(this, MainActivity.class));
+        }
+        finish();
+    }
+
     @Override
     public void onBackPressed() {
-        finish();
+        navigateBackFromPlayer();
     }
 
     @Override
