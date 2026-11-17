@@ -37,8 +37,6 @@ import androidx.core.widget.ImageViewCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 
-import com.bullhead.equalizer.DialogEqualizerFragment;
-
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Locale;
@@ -367,37 +365,7 @@ public class PlayerActivity extends AppCompatActivity {
     }
 
     private void openEqualizer() {
-        if (isBound && musicService != null) {
-            int sessionId = musicService.getAudioSessionId();
-            if (sessionId != 0) {
-                int accent = AccentColorHelper.getAccentColor(this);
-                DialogEqualizerFragment fragment = DialogEqualizerFragment.newBuilder()
-                        .setAudioSessionId(sessionId)
-                        .themeColor(Color.parseColor("#0B0B0F"))
-                        .textColor(Color.WHITE)
-                        .accentAlpha(AccentColorHelper.withAlpha(accent, 0x44))
-                        .darkColor(Color.parseColor("#0B0B0F"))
-                        .setAccentColor(accent)
-                        .build();
-
-                getSupportFragmentManager().registerFragmentLifecycleCallbacks(
-                        new FragmentManager.FragmentLifecycleCallbacks() {
-                            @Override
-                            public void onFragmentDestroyed(@NonNull FragmentManager fm, @NonNull Fragment f) {
-                                if (f == fragment) {
-                                    fm.unregisterFragmentLifecycleCallbacks(this);
-                                    saveAndReloadEqualizer();
-                                }
-                            }
-                        }, false);
-
-                fragment.show(getSupportFragmentManager(), "eq");
-            } else {
-                Toast.makeText(this, "Play a song first", Toast.LENGTH_SHORT).show();
-            }
-        } else {
-            Toast.makeText(this, "Play a song first", Toast.LENGTH_SHORT).show();
-        }
+        new ParrotEqualizerDialogFragment().show(getSupportFragmentManager(), "eq");
     }
 
     private void launchVoiceCommand() {
@@ -570,25 +538,6 @@ public class PlayerActivity extends AppCompatActivity {
 
     private String cleanFileName(String name) {
         return name.replaceAll("(?i)\\.(mp3|wav|m4a|flac|ogg|aac)$", "");
-    }
-
-    private void saveAndReloadEqualizer() {
-        android.content.SharedPreferences prefs = getSharedPreferences("parrot_eq", Context.MODE_PRIVATE);
-        android.content.SharedPreferences.Editor editor = prefs.edit();
-
-        editor.putBoolean("isEqualizerEnabled", com.bullhead.equalizer.Settings.isEqualizerEnabled);
-        editor.putInt("presetPos", com.bullhead.equalizer.Settings.presetPos);
-        editor.putInt("reverbPreset", com.bullhead.equalizer.Settings.reverbPreset);
-        editor.putInt("bassStrength", com.bullhead.equalizer.Settings.bassStrength);
-
-        if (com.bullhead.equalizer.Settings.seekbarpos != null) {
-            for (int i = 0; i < com.bullhead.equalizer.Settings.seekbarpos.length; i++) {
-                editor.putInt("band" + i, com.bullhead.equalizer.Settings.seekbarpos[i]);
-            }
-        }
-        editor.apply();
-
-        sendActionToService(MusicService.ACTION_RELOAD_EQUALIZER);
     }
 
     private void loadAlbumArt(String path, boolean animateFade) {

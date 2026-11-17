@@ -65,6 +65,11 @@ public class MusicService extends Service {
 
     private static volatile String activeSongPath = null;
     private static volatile boolean activeIsPlaying = false;
+    private static volatile MusicService activeInstance = null;
+
+    public static MusicService getActiveInstance() {
+        return activeInstance;
+    }
 
     public static String getActiveSongPath() {
         return activeSongPath;
@@ -160,6 +165,7 @@ public class MusicService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        activeInstance = this;
         stateManager = new PlayerStateManager(this);
         loadPlaybackPreferences();
         restoreSavedState();
@@ -1172,6 +1178,9 @@ public class MusicService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        if (activeInstance == this) {
+            activeInstance = null;
+        }
         activeIsPlaying = false;
         stopPeriodicStateSave();
         stateHandler.removeCallbacks(sleepTimerRunnable);
@@ -1206,6 +1215,14 @@ public class MusicService extends Service {
         }
     }
     
+    public Equalizer getEqualizerInstance() {
+        return mEqualizer;
+    }
+
+    public void reloadEqualizerNow() {
+        loadEqualizerSettings();
+    }
+
     private void loadEqualizerSettings() {
         if (mEqualizer == null || mBassBoost == null || mPresetReverb == null) return;
         SharedPreferences prefs = getSharedPreferences("parrot_eq", Context.MODE_PRIVATE);
@@ -1217,20 +1234,26 @@ public class MusicService extends Service {
             mPresetReverb.setEnabled(isEqEnabled);
             
             if (isEqEnabled) {
-                int bassStrength = prefs.getInt("bassStrength", -1);
-                if (bassStrength != -1 && mBassBoost.getStrengthSupported()) {
-                    mBassBoost.setStrength((short) bassStrength);
+                int bassStrength = prefs.getInt("bassStrength", 0);
+                if (bassStrength >= 0 && mBassBoost.getStrengthSupported()) {
+                    mBassBoost.setStrength((short) Math.min(1000, bassStrength));
                 }
                 
-                int reverbPreset = prefs.getInt("reverbPreset", -1);
-                if (reverbPreset != -1) {
+                int reverbPreset = prefs.getInt("reverbPreset", 0);
+                if (reverbPreset >= 0) {
                     mPresetReverb.setPreset((short) reverbPreset);
                 }
                 
+                short[] range = mEqualizer.getBandLevelRange();
+                short minEq = (range != null && range.length >= 2) ? range[0] : -1500;
+                short maxEq = (range != null && range.length >= 2) ? range[1] : 1500;
+
                 short numBands = mEqualizer.getNumberOfBands();
                 for (short i = 0; i < numBands; i++) {
-                    int level = prefs.getInt("band" + i, mEqualizer.getBandLevel(i));
-                    mEqualizer.setBandLevel(i, (short) level);
+                    int defaultLevel = prefs.getInt("band" + i, 0);
+                    int level = prefs.getInt("band_mb_" + i, defaultLevel);
+                    short clamped = (short) Math.max(minEq, Math.min(maxEq, level));
+                    mEqualizer.setBandLevel(i, clamped);
                 }
             }
         } catch (Exception e) {

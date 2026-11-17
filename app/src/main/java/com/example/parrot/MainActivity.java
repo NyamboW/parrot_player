@@ -40,8 +40,6 @@ import androidx.navigation.fragment.NavHostFragment;
 import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
 
-import com.bullhead.equalizer.DialogEqualizerFragment;
-
 import java.io.File;
 import java.util.ArrayList;
 
@@ -473,56 +471,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openSoundEffectsDialog() {
-        if (isBound && musicService != null) {
-            int sessionId = musicService.getAudioSessionId();
-            if (sessionId != 0) {
-                int accent = AccentColorHelper.getAccentColor(this);
-                DialogEqualizerFragment fragment = DialogEqualizerFragment.newBuilder()
-                        .setAudioSessionId(sessionId)
-                        .themeColor(Color.parseColor("#0B0B0F"))
-                        .textColor(Color.WHITE)
-                        .accentAlpha(AccentColorHelper.withAlpha(accent, 0x44))
-                        .darkColor(Color.parseColor("#0B0B0F"))
-                        .setAccentColor(accent)
-                        .build();
-
-                getSupportFragmentManager().registerFragmentLifecycleCallbacks(
-                        new FragmentManager.FragmentLifecycleCallbacks() {
-                            @Override
-                            public void onFragmentDestroyed(@NonNull FragmentManager fm, @NonNull Fragment f) {
-                                if (f == fragment) {
-                                    fm.unregisterFragmentLifecycleCallbacks(this);
-                                    saveAndReloadEqualizer();
-                                }
-                            }
-                        }, false);
-
-                fragment.show(getSupportFragmentManager(), "eq_drawer");
-                return;
-            }
-        }
-        Toast.makeText(this, "Play a song first to use Sound Effects", Toast.LENGTH_SHORT).show();
-    }
-
-    private void saveAndReloadEqualizer() {
-        SharedPreferences eqPrefs = getSharedPreferences("parrot_eq", Context.MODE_PRIVATE);
-        SharedPreferences.Editor editor = eqPrefs.edit();
-
-        editor.putBoolean("isEqualizerEnabled", com.bullhead.equalizer.Settings.isEqualizerEnabled);
-        editor.putInt("presetPos", com.bullhead.equalizer.Settings.presetPos);
-        editor.putInt("reverbPreset", com.bullhead.equalizer.Settings.reverbPreset);
-        editor.putInt("bassStrength", com.bullhead.equalizer.Settings.bassStrength);
-
-        if (com.bullhead.equalizer.Settings.seekbarpos != null) {
-            for (int i = 0; i < com.bullhead.equalizer.Settings.seekbarpos.length; i++) {
-                editor.putInt("band" + i, com.bullhead.equalizer.Settings.seekbarpos[i]);
-            }
-        }
-        editor.apply();
-
-        Intent reloadIntent = new Intent(this, MusicService.class);
-        reloadIntent.setAction(MusicService.ACTION_RELOAD_EQUALIZER);
-        startService(reloadIntent);
+        new ParrotEqualizerDialogFragment().show(getSupportFragmentManager(), "eq_drawer");
     }
 
     @Override
