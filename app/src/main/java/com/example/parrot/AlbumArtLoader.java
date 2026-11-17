@@ -66,18 +66,21 @@ public final class AlbumArtLoader {
     }
 
     public Bitmap getCachedFull(String path) {
-        if (path == null) return null;
+        if (path == null)
+            return null;
         return memoryCache.get(cacheKey(path, SIZE_FULL));
     }
 
     public Bitmap getCachedThumb(String path) {
-        if (path == null) return null;
+        if (path == null)
+            return null;
         return memoryCache.get(cacheKey(path, SIZE_THUMB));
     }
 
     public Bitmap getBestCachedArt(String path) {
         Bitmap full = getCachedFull(path);
-        if (full != null) return full;
+        if (full != null)
+            return full;
         return getCachedThumb(path);
     }
 
@@ -94,9 +97,11 @@ public final class AlbumArtLoader {
     }
 
     public void preloadFullArt(String path) {
-        if (path == null || path.isEmpty()) return;
-        if (getCachedFull(path) != null || hasNoArt(path)) return;
-        loadArt(path, SIZE_FULL, thumbnailExecutor, null);
+        if (path == null || path.isEmpty())
+            return;
+        if (getCachedFull(path) != null || hasNoArt(path))
+            return;
+        loadArt(path, SIZE_FULL, priorityExecutor, null);
     }
 
     private void loadArt(String path, int targetSize, ExecutorService executor, ArtCallback callback) {
@@ -208,7 +213,8 @@ public final class AlbumArtLoader {
     }
 
     private void deliverCallback(ArtCallback callback, Bitmap bitmap) {
-        if (callback == null) return;
+        if (callback == null)
+            return;
         if (Looper.myLooper() == Looper.getMainLooper()) {
             callback.onArtLoaded(bitmap);
         } else {

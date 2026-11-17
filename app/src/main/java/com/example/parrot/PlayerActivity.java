@@ -612,15 +612,15 @@ public class PlayerActivity extends AppCompatActivity {
         Bitmap cachedThumb = loader.getCachedThumb(path);
         if (cachedThumb != null) {
             setAlbumArtBitmap(cachedThumb, animateFade);
-        } else {
-            imgView.setImageResource(R.drawable.ic_music);
         }
 
         loader.loadFullArt(path, bitmap -> {
             if (!isFinishing() && !isDestroyed() && path.equals(imgView.getTag())) {
                 if (bitmap != null) {
-                    setAlbumArtBitmap(bitmap, cachedThumb == null);
-                } else if (cachedThumb == null) {
+                    setAlbumArtBitmap(bitmap, animateFade && cachedThumb == null);
+                } else {
+                    imgView.animate().cancel();
+                    imgView.setAlpha(1f);
                     imgView.setImageResource(R.drawable.ic_music);
                 }
             }

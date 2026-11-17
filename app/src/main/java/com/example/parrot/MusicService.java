@@ -70,6 +70,7 @@ public class MusicService extends Service {
     private int playToken = 0;
     private ArrayList<String> mySongs = new ArrayList<>();
     private int position = 0;
+    private int preselectedShufflePos = -1;
     private boolean isShuffle = false;
     private boolean isRepeat = false;
     
@@ -506,7 +507,13 @@ public class MusicService extends Service {
         }
 
         if (isShuffle) {
-            position = pickNextShufflePosition();
+            if (preselectedShufflePos >= 0 && preselectedShufflePos < mySongs.size()
+                    && preselectedShufflePos != position) {
+                position = preselectedShufflePos;
+            } else {
+                position = pickNextShufflePosition();
+            }
+            preselectedShufflePos = -1;
         } else {
             position = (position + 1) % mySongs.size();
         }
@@ -715,18 +722,32 @@ public class MusicService extends Service {
 
     private void preloadNextSongArt() {
         if (mySongs == null || mySongs.isEmpty()) return;
-        String nextPath = null;
+        AlbumArtLoader loader = AlbumArtLoader.getInstance();
+
         if (!queueManager.isEmpty()) {
             ArrayList<String> q = queueManager.getQueue();
             if (!q.isEmpty()) {
-                nextPath = q.get(0);
+                loader.preloadFullArt(q.get(0));
             }
-        } else if (!isShuffle && mySongs.size() > 1) {
-            int nextIndex = (position + 1) % mySongs.size();
-            nextPath = mySongs.get(nextIndex);
         }
-        if (nextPath != null) {
-            AlbumArtLoader.getInstance().preloadFullArt(nextPath);
+
+        if (mySongs.size() > 1) {
+            if (isShuffle) {
+                if (preselectedShufflePos < 0 || preselectedShufflePos >= mySongs.size()
+                        || preselectedShufflePos == position) {
+                    preselectedShufflePos = pickNextShufflePosition();
+                }
+                loader.preloadFullArt(mySongs.get(preselectedShufflePos));
+            } else {
+                int next1 = (position + 1) % mySongs.size();
+                int prev1 = (position - 1 < 0) ? mySongs.size() - 1 : position - 1;
+                loader.preloadFullArt(mySongs.get(next1));
+                loader.preloadFullArt(mySongs.get(prev1));
+                if (mySongs.size() > 2) {
+                    int next2 = (position + 2) % mySongs.size();
+                    loader.preloadFullArt(mySongs.get(next2));
+                }
+            }
         }
     }
     
