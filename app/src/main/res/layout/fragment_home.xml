@@ -110,6 +110,7 @@
         android:background="#0B0B0F"
         android:paddingStart="10dp"
         android:paddingEnd="10dp"
+        app:tabBackground="@android:color/transparent"
         app:tabIndicator="@drawable/tab_pill_indicator"
         app:tabIndicatorColor="#4CAF50"
         app:tabIndicatorFullWidth="true"
@@ -117,7 +118,7 @@
         app:tabMode="scrollable"
         app:tabPaddingEnd="16dp"
         app:tabPaddingStart="16dp"
-        app:tabRippleColor="#18FFFFFF"
+        app:tabRippleColor="@null"
         app:tabSelectedTextColor="#FFFFFF"
         app:tabTextAppearance="@style/ParrotTabText"
         app:tabTextColor="#8A93A2" />

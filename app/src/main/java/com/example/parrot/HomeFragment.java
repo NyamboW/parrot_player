@@ -80,6 +80,7 @@ public class HomeFragment extends Fragment {
         });
 
         new TabLayoutMediator(tabLayout, viewPager, (tab, position) -> tab.setText(tabTitles[position])).attach();
+        tabLayout.setTabRippleColor(null);
 
         // Default to Tracks
         viewPager.setCurrentItem(1, false);
