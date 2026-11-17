@@ -184,6 +184,8 @@ public class AlbumsFragment extends Fragment {
             }
         });
 
+        AutoHideScrollHelper.attach(gridView, getActivity(), null);
+
         gridView.setOnItemClickListener((parent, view, position, id) -> {
             Intent intent = new Intent(getContext(), GroupSongsActivity.class);
             intent.putExtra("type", "album");

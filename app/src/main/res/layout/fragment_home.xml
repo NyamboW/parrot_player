@@ -6,128 +6,136 @@
     android:background="#0B0B0F"
     android:orientation="vertical">
 
-    <!-- Sleek Library Quick-Action Bar -->
     <LinearLayout
+        android:id="@+id/homeTopContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="16dp"
-        android:paddingTop="6dp"
-        android:paddingEnd="14dp"
-        android:paddingBottom="10dp">
+        android:orientation="vertical">
 
+        <!-- Sleek Library Quick-Action Bar -->
         <LinearLayout
-            android:layout_width="0dp"
+            android:id="@+id/homeHeaderBar"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFamily="sans-serif-medium"
-                android:text="Your Library"
-                android:textColor="#F5F7FA"
-                android:textSize="17sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/txtHomeTrackCount"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="1dp"
-                android:text="Scanning music..."
-                android:textColor="#8A93A2"
-                android:textSize="12sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/btnHomePlayAll"
-            android:layout_width="wrap_content"
-            android:layout_height="34dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/card_surface_bg"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
+            android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingStart="12dp"
-            android:paddingEnd="14dp">
+            android:paddingStart="16dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="10dp">
 
-            <ImageView
-                android:layout_width="15dp"
-                android:layout_height="15dp"
-                android:src="@drawable/ic_play"
-                app:tint="#E2E6EE" />
-
-            <TextView
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="5dp"
-                android:fontFamily="sans-serif-medium"
-                android:text="Play"
-                android:textColor="#E2E6EE"
-                android:textSize="12sp" />
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="Your Library"
+                    android:textColor="#F5F7FA"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/txtHomeTrackCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:text="Scanning music..."
+                    android:textColor="#8A93A2"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/btnHomePlayAll"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/card_surface_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingStart="12dp"
+                android:paddingEnd="14dp">
+
+                <ImageView
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:src="@drawable/ic_play"
+                    app:tint="#E2E6EE" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="Play"
+                    android:textColor="#E2E6EE"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/btnHomeShuffleAll"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:background="@drawable/card_create_playlist_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingStart="12dp"
+                android:paddingEnd="14dp">
+
+                <ImageView
+                    android:id="@+id/imgHomeShuffleIcon"
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:src="@drawable/ic_shuffle"
+                    app:tint="#4CAF50" />
+
+                <TextView
+                    android:id="@+id/txtHomeShuffleLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="Shuffle"
+                    android:textColor="#4CAF50"
+                    android:textSize="12sp" />
+            </LinearLayout>
         </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/btnHomeShuffleAll"
-            android:layout_width="wrap_content"
-            android:layout_height="34dp"
-            android:background="@drawable/card_create_playlist_bg"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:orientation="horizontal"
-            android:paddingStart="12dp"
-            android:paddingEnd="14dp">
+        <!-- Modern Pill Tabs -->
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/tabLayout"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:background="#0B0B0F"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            app:tabBackground="@android:color/transparent"
+            app:tabIndicator="@drawable/tab_pill_indicator"
+            app:tabIndicatorColor="#4CAF50"
+            app:tabIndicatorFullWidth="true"
+            app:tabIndicatorGravity="stretch"
+            app:tabMode="scrollable"
+            app:tabPaddingEnd="16dp"
+            app:tabPaddingStart="16dp"
+            app:tabRippleColor="@null"
+            app:tabSelectedTextColor="#FFFFFF"
+            app:tabTextAppearance="@style/ParrotTabText"
+            app:tabTextColor="#8A93A2" />
 
-            <ImageView
-                android:id="@+id/imgHomeShuffleIcon"
-                android:layout_width="15dp"
-                android:layout_height="15dp"
-                android:src="@drawable/ic_shuffle"
-                app:tint="#4CAF50" />
-
-            <TextView
-                android:id="@+id/txtHomeShuffleLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="5dp"
-                android:fontFamily="sans-serif-medium"
-                android:text="Shuffle"
-                android:textColor="#4CAF50"
-                android:textSize="12sp" />
-        </LinearLayout>
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="4dp"
+            android:background="#151922" />
     </LinearLayout>
-
-    <!-- Modern Pill Tabs -->
-    <com.google.android.material.tabs.TabLayout
-        android:id="@+id/tabLayout"
-        android:layout_width="match_parent"
-        android:layout_height="44dp"
-        android:background="#0B0B0F"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"
-        app:tabBackground="@android:color/transparent"
-        app:tabIndicator="@drawable/tab_pill_indicator"
-        app:tabIndicatorColor="#4CAF50"
-        app:tabIndicatorFullWidth="true"
-        app:tabIndicatorGravity="stretch"
-        app:tabMode="scrollable"
-        app:tabPaddingEnd="16dp"
-        app:tabPaddingStart="16dp"
-        app:tabRippleColor="@null"
-        app:tabSelectedTextColor="#FFFFFF"
-        app:tabTextAppearance="@style/ParrotTabText"
-        app:tabTextColor="#8A93A2" />
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginTop="4dp"
-        android:background="#151922" />
 
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/viewPager"

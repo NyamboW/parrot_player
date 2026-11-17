@@ -60,10 +60,24 @@ public class FavFragment extends Fragment {
     private SongDeletionHelper songDeletionHelper;
 
     private final BroadcastReceiver playbackStateReceiver = new BroadcastReceiver() {
+        private String lastSongPath = null;
+        private boolean lastPlaying = false;
+
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (adapter != null && isAdded()) {
+            if (adapter == null || !isAdded() || intent == null || intent.getAction() == null) return;
+            String action = intent.getAction();
+            if (AccentColorHelper.ACTION_ACCENT_COLOR_CHANGED.equals(action)) {
                 adapter.notifyDataSetChanged();
+            } else if (MusicService.BROADCAST_UPDATE_UI.equals(action)) {
+                String currentPath = MusicService.getActiveSongPath();
+                boolean currentPlaying = MusicService.isActivelyPlaying();
+                boolean pathChanged = (currentPath == null) ? (lastSongPath != null) : !currentPath.equals(lastSongPath);
+                if (pathChanged || currentPlaying != lastPlaying) {
+                    lastSongPath = currentPath;
+                    lastPlaying = currentPlaying;
+                    adapter.notifyDataSetChanged();
+                }
             }
         }
     };
@@ -483,7 +497,7 @@ public class FavFragment extends Fragment {
 
         favListView.setAdapter(adapter);
 
-        favListView.setOnScrollListener(new AbsListView.OnScrollListener() {
+        AutoHideScrollHelper.attach(favListView, getActivity(), new AbsListView.OnScrollListener() {
             @Override
             public void onScrollStateChanged(AbsListView view, int scrollState) {
                 if (scrollState == SCROLL_STATE_TOUCH_SCROLL) {

@@ -83,6 +83,15 @@ public class HomeFragment extends Fragment {
         new TabLayoutMediator(tabLayout, viewPager, (tab, position) -> tab.setText(tabTitles[position])).attach();
         tabLayout.setTabRippleColor(null);
 
+        viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+            @Override
+            public void onPageSelected(int position) {
+                if (getActivity() instanceof AutoHideScrollHelper.ScrollBarController) {
+                    ((AutoHideScrollHelper.ScrollBarController) getActivity()).setBarsVisible(true);
+                }
+            }
+        });
+
         // Default to Tracks
         viewPager.setCurrentItem(1, false);
 

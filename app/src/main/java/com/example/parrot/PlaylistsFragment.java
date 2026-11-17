@@ -149,6 +149,8 @@ public class PlaylistsFragment extends Fragment {
             }
         });
 
+        AutoHideScrollHelper.attach(listView, getActivity(), null);
+
         listView.setOnItemClickListener((parent, view, position, id) -> {
             if (position == 0) {
                 showCreatePlaylistDialog();

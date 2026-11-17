@@ -198,6 +198,8 @@ public class ArtistsFragment extends Fragment {
             }
         });
 
+        AutoHideScrollHelper.attach(listView, getActivity(), null);
+
         listView.setOnItemClickListener((parent, view, position, id) -> {
             Intent intent = new Intent(getContext(), GroupSongsActivity.class);
             intent.putExtra("type", "artist");

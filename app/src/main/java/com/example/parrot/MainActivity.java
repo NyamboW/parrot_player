@@ -43,7 +43,7 @@ import androidx.navigation.ui.NavigationUI;
 import java.io.File;
 import java.util.ArrayList;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements AutoHideScrollHelper.ScrollBarController {
 
     private static final int COLOR_ACTIVE_TEXT = Color.WHITE;
     private static final int COLOR_INACTIVE_ITEM = Color.parseColor("#E0E3E8");
@@ -54,6 +54,8 @@ public class MainActivity extends AppCompatActivity {
     ImageView imgMiniMusic;
     ImageButton miniPlayPause;
     ImageButton miniNext;
+    private androidx.appcompat.widget.Toolbar toolbar;
+    private boolean areBarsVisible = true;
 
     DrawerLayout drawerLayout;
     LinearLayout navRowHome, navRowSoundEffects, navRowFavorites, navRowQueue;
@@ -132,9 +134,14 @@ public class MainActivity extends AppCompatActivity {
 
                         if (miniPlayer.getVisibility() != View.VISIBLE) {
                             miniPlayer.setVisibility(View.VISIBLE);
-                            miniPlayer.setAlpha(0f);
-                            miniPlayer.setTranslationY(24f);
-                            miniPlayer.animate().alpha(1f).translationY(0f).setDuration(200).start();
+                            if (areBarsVisible) {
+                                miniPlayer.setAlpha(0f);
+                                miniPlayer.setTranslationY(24f);
+                                miniPlayer.animate().alpha(1f).translationY(0f).setDuration(200).start();
+                            } else {
+                                miniPlayer.setAlpha(0f);
+                                miniPlayer.setTranslationY(220f);
+                            }
                         }
                         miniSongName.setText(song);
                         miniPlayPause.setImageResource(
@@ -171,7 +178,7 @@ public class MainActivity extends AppCompatActivity {
                 startActivity(new Intent(this, PlayerActivity.class))
         );
 
-        androidx.appcompat.widget.Toolbar toolbar = findViewById(R.id.layoutToolBar);
+        toolbar = findViewById(R.id.layoutToolBar);
         setSupportActionBar(toolbar);
 
         drawerLayout = findViewById(R.id.drawerLayout);
@@ -213,9 +220,10 @@ public class MainActivity extends AppCompatActivity {
                             .build();
             NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
 
-            navController.addOnDestinationChangedListener((controller, destination, arguments) ->
-                    updateDrawerSelection(destination.getId())
-            );
+            navController.addOnDestinationChangedListener((controller, destination, arguments) -> {
+                setBarsVisible(true);
+                updateDrawerSelection(destination.getId());
+            });
 
             navRowHome.setOnClickListener(v -> {
                 drawerLayout.closeDrawer(GravityCompat.START);
@@ -472,6 +480,29 @@ public class MainActivity extends AppCompatActivity {
 
     private void openSoundEffectsDialog() {
         new ParrotEqualizerDialogFragment().show(getSupportFragmentManager(), "eq_drawer");
+    }
+
+    @Override
+    public void setBarsVisible(boolean visible) {
+        if (areBarsVisible == visible) return;
+        areBarsVisible = visible;
+
+        AutoHideScrollHelper.animateTopBarCollapse(toolbar, visible);
+
+        View homeHeaderBar = findViewById(R.id.homeHeaderBar);
+        if (homeHeaderBar != null) {
+            AutoHideScrollHelper.animateTopBarCollapse(homeHeaderBar, visible);
+        }
+
+        if (miniPlayer != null && miniPlayer.getVisibility() == View.VISIBLE) {
+            int slideDist = miniPlayer.getHeight() > 0 ? miniPlayer.getHeight() + 36 : 220;
+            miniPlayer.animate().cancel();
+            miniPlayer.animate()
+                    .translationY(visible ? 0f : slideDist)
+                    .alpha(visible ? 1f : 0f)
+                    .setDuration(190)
+                    .start();
+        }
     }
 
     @Override

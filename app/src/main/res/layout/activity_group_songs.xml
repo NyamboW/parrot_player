@@ -10,6 +10,7 @@
         android:id="@+id/toolbarGroup"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
+        android:minHeight="0dp"
         android:background="#12151C"
         app:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
         app:titleTextColor="#FFFFFF" />

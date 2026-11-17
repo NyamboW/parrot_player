@@ -45,9 +45,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-public class GroupSongsActivity extends AppCompatActivity {
+public class GroupSongsActivity extends AppCompatActivity implements AutoHideScrollHelper.ScrollBarController {
 
     private ListView listView;
+    private Toolbar toolbar;
+    private boolean areBarsVisible = true;
     private LinearLayout layoutPlaylistTopActions;
     private LinearLayout layoutPlaylistEmpty;
     private LinearLayout btnTopImportFolder, btnTopAddSongs;
@@ -69,17 +71,27 @@ public class GroupSongsActivity extends AppCompatActivity {
     private SongDeletionHelper songDeletionHelper;
 
     private final BroadcastReceiver playbackStateReceiver = new BroadcastReceiver() {
+        private String lastSongPath = null;
+        private boolean lastPlaying = false;
+
         @Override
         public void onReceive(Context context, Intent intent) {
             if (isFinishing() || isDestroyed() || intent == null || intent.getAction() == null) return;
             String action = intent.getAction();
             if (AccentColorHelper.ACTION_ACCENT_COLOR_CHANGED.equals(action)) {
                 applyAccentStyle();
+                if (songsAdapter != null) songsAdapter.notifyDataSetChanged();
             } else if (PermissionHelper.ACTION_PERMISSIONS_GRANTED.equals(action)) {
                 loadGroupSongs(groupType, groupName);
-            }
-            if (songsAdapter != null) {
-                songsAdapter.notifyDataSetChanged();
+            } else if (MusicService.BROADCAST_UPDATE_UI.equals(action) && songsAdapter != null) {
+                String currentPath = MusicService.getActiveSongPath();
+                boolean currentPlaying = MusicService.isActivelyPlaying();
+                boolean pathChanged = (currentPath == null) ? (lastSongPath != null) : !currentPath.equals(lastSongPath);
+                if (pathChanged || currentPlaying != lastPlaying) {
+                    lastSongPath = currentPath;
+                    lastPlaying = currentPlaying;
+                    songsAdapter.notifyDataSetChanged();
+                }
             }
         }
     };
@@ -89,7 +101,7 @@ public class GroupSongsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_group_songs);
 
-        Toolbar toolbar = findViewById(R.id.toolbarGroup);
+        toolbar = findViewById(R.id.toolbarGroup);
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
@@ -836,6 +848,7 @@ public class GroupSongsActivity extends AppCompatActivity {
             }
         };
         listView.setAdapter(songsAdapter);
+        AutoHideScrollHelper.attach(listView, this, null);
 
         listView.setOnItemClickListener((parent, view, position, id) -> {
             if (position >= 0 && position < songList.size()) {
@@ -846,6 +859,16 @@ public class GroupSongsActivity extends AppCompatActivity {
             intent.putExtra("pos", position);
             startActivity(intent);
         });
+    }
+
+    @Override
+    public void setBarsVisible(boolean visible) {
+        if (areBarsVisible == visible) return;
+        areBarsVisible = visible;
+        AutoHideScrollHelper.animateTopBarCollapse(toolbar, visible);
+        if (layoutPlaylistTopActions != null && "playlist".equals(groupType) && !songList.isEmpty()) {
+            AutoHideScrollHelper.animateTopBarCollapse(layoutPlaylistTopActions, visible);
+        }
     }
 
     private void showAddToPlaylistDialog(String songPath) {
