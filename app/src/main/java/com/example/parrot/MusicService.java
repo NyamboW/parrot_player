@@ -423,6 +423,7 @@ public class MusicService extends Service {
             });
 
             // Satisfy foreground service & update UI immediately without waiting for preparation
+            updateMediaSession();
             showNotification(R.drawable.ic_pause);
             broadcastUIUpdate();
             ensureAlbumArtLoaded(songPath);
@@ -611,7 +612,9 @@ public class MusicService extends Service {
                 .addAction(R.drawable.ic_close, "Close", closePendingIntent)
                 .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
                         .setMediaSession(mediaSession.getSessionToken())
-                        .setShowActionsInCompactView(0, 1, 2))
+                        .setShowActionsInCompactView(0, 1, 2)
+                        .setShowCancelButton(true)
+                        .setCancelButtonIntent(closePendingIntent))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(contentIntent)
                 .setOnlyAlertOnce(true)
@@ -655,26 +658,38 @@ public class MusicService extends Service {
     }
     
     private void updateMediaSession() {
-        if (mediaPlayer == null || !isPrepared || mySongs.isEmpty() || position < 0 || position >= mySongs.size()) return;
+        if (mediaPlayer == null || mySongs.isEmpty() || position < 0 || position >= mySongs.size()) return;
         
         long currentPosition = getCurrentPosition();
-        int state = isPlaying() ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED;
+        boolean playing = !isPrepared || isPlaying();
+        int state = playing ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED;
         
+        PlaybackStateCompat.CustomAction leftSpacerAction = new PlaybackStateCompat.CustomAction.Builder(
+                "ACTION_NOOP",
+                " ",
+                R.drawable.ic_transparent
+        ).build();
+
         PlaybackStateCompat.CustomAction closeAction = new PlaybackStateCompat.CustomAction.Builder(
                 ACTION_CLOSE,
                 "Close",
                 R.drawable.ic_close
         ).build();
         
-        mediaSession.setPlaybackState(new PlaybackStateCompat.Builder()
+        PlaybackStateCompat.Builder stateBuilder = new PlaybackStateCompat.Builder()
                 .setActions(PlaybackStateCompat.ACTION_PLAY |
                             PlaybackStateCompat.ACTION_PAUSE |
                             PlaybackStateCompat.ACTION_SKIP_TO_NEXT |
                             PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS |
-                            PlaybackStateCompat.ACTION_SEEK_TO)
-                .addCustomAction(closeAction)
-                .setState(state, currentPosition, 1.0f)
-                .build());
+                            PlaybackStateCompat.ACTION_SEEK_TO);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ MediaControlPanel maps CustomAction #1 to the left slot (action0)
+            // and CustomAction #2 to the right slot (action1).
+            stateBuilder.addCustomAction(leftSpacerAction);
+        }
+        stateBuilder.addCustomAction(closeAction)
+                .setState(state, currentPosition, 1.0f);
+        mediaSession.setPlaybackState(stateBuilder.build());
                 
         String songPath = mySongs.get(this.position);
         String songName = getFileName(songPath);
