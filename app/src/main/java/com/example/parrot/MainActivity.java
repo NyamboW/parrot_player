@@ -487,11 +487,9 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
         if (areBarsVisible == visible) return;
         areBarsVisible = visible;
 
-        AutoHideScrollHelper.animateTopBarCollapse(toolbar, visible);
-
-        View homeHeaderBar = findViewById(R.id.homeHeaderBar);
-        if (homeHeaderBar != null) {
-            AutoHideScrollHelper.animateTopBarCollapse(homeHeaderBar, visible);
+        View homeTopContainer = findViewById(R.id.homeTopContainer);
+        if (homeTopContainer != null) {
+            AutoHideScrollHelper.animateTopBarCollapse(homeTopContainer, visible);
         }
 
         if (miniPlayer != null && miniPlayer.getVisibility() == View.VISIBLE) {
@@ -500,7 +498,7 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
             miniPlayer.animate()
                     .translationY(visible ? 0f : slideDist)
                     .alpha(visible ? 1f : 0f)
-                    .setDuration(190)
+                    .setDuration(220)
                     .start();
         }
     }

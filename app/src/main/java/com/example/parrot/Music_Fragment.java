@@ -124,6 +124,8 @@ public class Music_Fragment extends Fragment {
         // Search views removed from layout, handled via OptionsMenu
 
         SwipeRefreshLayout refreshLayout = view.findViewById(R.id.pullToRefresh);
+        float density = getResources().getDisplayMetrics().density;
+        refreshLayout.setProgressViewOffset(false, (int) (76 * density), (int) (136 * density));
         refreshLayout.setOnRefreshListener(() -> {
             requestPermission();
             refreshLayout.setRefreshing(false);

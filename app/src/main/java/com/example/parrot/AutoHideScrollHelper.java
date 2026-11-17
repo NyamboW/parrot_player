@@ -1,25 +1,29 @@
 package com.example.parrot;
 
-import android.animation.Animator;
-import android.animation.AnimatorListenerAdapter;
-import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.AbsListView;
+import android.widget.GridView;
+
+import androidx.viewpager2.widget.ViewPager2;
 
 /**
- * Attaches to any ListView or GridView to auto-hide top and bottom bars when scrolling down
- * and auto-show them when scrolling up or reaching the top of the list.
+ * Attaches to any ListView or GridView to auto-hide top and bottom overlay bars using pure
+ * GPU-accelerated translationY animations (zero requestLayout() passes, zero scroll jitter).
  */
 public final class AutoHideScrollHelper {
 
     public interface ScrollBarController {
         void setBarsVisible(boolean visible);
     }
+
+    private static final long TOGGLE_COOLDOWN_MS = 240L;
+    private static long lastToggleElapsedMs = 0L;
 
     private AutoHideScrollHelper() {}
 
@@ -30,8 +34,23 @@ public final class AutoHideScrollHelper {
         if (listView == null || activity == null) return;
 
         final float density = activity.getResources().getDisplayMetrics().density;
-        final float hideTouchThresholdPx = 16f * density;
+        final float hideTouchThresholdPx = 18f * density;
         final float showTouchThresholdPx = 14f * density;
+
+        // If inside HomeFragment's ViewPager2, apply top padding so item 0 sits below the overlay header
+        if (isInsideViewPager2(listView)) {
+            int topPadDp = (listView instanceof GridView) ? 114 : 106;
+            int topPadPx = (int) (topPadDp * density);
+            if (listView.getPaddingTop() < topPadPx) {
+                listView.setClipToPadding(false);
+                listView.setPadding(
+                        listView.getPaddingLeft(),
+                        topPadPx,
+                        listView.getPaddingRight(),
+                        listView.getPaddingBottom()
+                );
+            }
+        }
 
         final boolean[] isUserTouching = new boolean[]{false};
         final int[] currentScrollState = new int[]{AbsListView.OnScrollListener.SCROLL_STATE_IDLE};
@@ -73,11 +92,11 @@ public final class AutoHideScrollHelper {
                     if (accumulatedDy >= hideTouchThresholdPx) {
                         accumulatedDy = 0f;
                         if (canScrollOrNotAtTop(listView)) {
-                            notifyController(activity, false);
+                            notifyControllerDebounced(activity, false);
                         }
                     } else if (accumulatedDy <= -showTouchThresholdPx) {
                         accumulatedDy = 0f;
-                        notifyController(activity, true);
+                        notifyControllerDebounced(activity, true);
                     }
                 } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                     isUserTouching[0] = false;
@@ -89,8 +108,6 @@ public final class AutoHideScrollHelper {
         });
 
         listView.setOnScrollListener(new AbsListView.OnScrollListener() {
-            private int lastFirstVisibleItem = 0;
-
             @Override
             public void onScrollStateChanged(AbsListView view, int scrollState) {
                 currentScrollState[0] = scrollState;
@@ -105,125 +122,82 @@ public final class AutoHideScrollHelper {
                     extraListener.onScroll(view, firstVisibleItem, visibleItemCount, totalItemCount);
                 }
 
-                // Ignore layout-pass onScroll events from idle or offscreen ViewPager2 pages
                 if (!isUserTouching[0] && currentScrollState[0] == SCROLL_STATE_IDLE) {
-                    lastFirstVisibleItem = firstVisibleItem;
                     return;
                 }
                 if (!view.isShown() || view.getChildCount() == 0) {
                     return;
                 }
 
-                View firstChild = view.getChildAt(0);
-                int currentTop = firstChild.getTop();
-
-                // Restore bars when actively scrolling back to the very top of the list
-                if (firstVisibleItem == 0 && currentTop >= -6 && lastFirstVisibleItem > 0) {
-                    notifyController(activity, true);
-                    lastFirstVisibleItem = 0;
-                    return;
+                // Automatically restore bars when scrolling back to the very top of the list
+                if (firstVisibleItem == 0 && view.getChildAt(0).getTop() >= 0) {
+                    notifyControllerDebounced(activity, true);
                 }
-
-                // Handle fast fling across multiple items
-                if (firstVisibleItem > lastFirstVisibleItem + 1) {
-                    notifyController(activity, false);
-                } else if (firstVisibleItem < lastFirstVisibleItem - 1) {
-                    notifyController(activity, true);
-                }
-                lastFirstVisibleItem = firstVisibleItem;
             }
         });
+    }
+
+    private static boolean isInsideViewPager2(View view) {
+        ViewParent parent = view.getParent();
+        while (parent != null) {
+            if (parent instanceof ViewPager2) {
+                return true;
+            }
+            parent = parent.getParent();
+        }
+        return false;
     }
 
     private static boolean canScrollOrNotAtTop(AbsListView listView) {
         if (listView.getChildCount() == 0) return false;
         if (listView.getFirstVisiblePosition() > 0) return true;
-        if (listView.getChildAt(0).getTop() < -4) return true;
+        if (listView.getChildAt(0).getTop() < listView.getPaddingTop() - 8) return true;
         return listView.canScrollVertically(1);
     }
 
-    private static void notifyController(Activity activity, boolean visible) {
-        if (activity instanceof ScrollBarController) {
-            ((ScrollBarController) activity).setBarsVisible(visible);
-        }
+    private static void notifyControllerDebounced(Activity activity, boolean visible) {
+        if (!(activity instanceof ScrollBarController)) return;
+        long now = SystemClock.uptimeMillis();
+        if (now - lastToggleElapsedMs < TOGGLE_COOLDOWN_MS) return;
+        lastToggleElapsedMs = now;
+        ((ScrollBarController) activity).setBarsVisible(visible);
     }
 
     /**
-     * Smoothly slides a top bar view out of view by animating its topMargin between 0 and -fullHeight.
-     * Because the parent is a vertical LinearLayout, this pulls the content below upward smoothly
-     * without squishing the bar's internal text/buttons.
+     * Smoothly slides an overlay top bar up/down using GPU translationY without triggering requestLayout().
      */
     public static void animateTopBarCollapse(final View barView, final boolean show) {
         if (barView == null) return;
 
-        Object runningAnim = barView.getTag(R.id.layoutToolBar);
-        if (runningAnim instanceof ValueAnimator) {
-            ((ValueAnimator) runningAnim).cancel();
+        int height = barView.getHeight();
+        if (height <= 0) {
+            barView.measure(
+                    View.MeasureSpec.makeMeasureSpec(
+                            barView.getResources().getDisplayMetrics().widthPixels,
+                            View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            );
+            height = barView.getMeasuredHeight();
         }
+        if (height <= 0) return;
 
-        Integer storedFullHeight = (Integer) barView.getTag(R.id.miniPlayer);
-        int currentHeight = barView.getHeight();
-        if (storedFullHeight == null || storedFullHeight <= 0) {
-            if (currentHeight > 0) {
-                storedFullHeight = currentHeight;
-            } else {
-                barView.measure(
-                        View.MeasureSpec.makeMeasureSpec(
-                                barView.getResources().getDisplayMetrics().widthPixels,
-                                View.MeasureSpec.EXACTLY),
-                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-                );
-                storedFullHeight = barView.getMeasuredHeight();
-            }
-            if (storedFullHeight > 0) {
-                barView.setTag(R.id.miniPlayer, storedFullHeight);
-            }
-        }
-
-        if (storedFullHeight == null || storedFullHeight <= 0) return;
-
-        final int fullHeight = storedFullHeight;
-        final ViewGroup.LayoutParams rawLp = barView.getLayoutParams();
-        if (!(rawLp instanceof ViewGroup.MarginLayoutParams)) return;
-        final ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) rawLp;
-
-        final int startMargin = lp.topMargin;
-        final int targetMargin = show ? 0 : -fullHeight;
-
-        if (startMargin == targetMargin) {
-            barView.setAlpha(show ? 1f : 0f);
-            return;
-        }
-
-        ValueAnimator animator = ValueAnimator.ofInt(startMargin, targetMargin);
-        animator.setDuration(200);
-        animator.setInterpolator(new DecelerateInterpolator());
-        animator.addUpdateListener(anim -> {
-            int margin = (int) anim.getAnimatedValue();
-            lp.topMargin = margin;
-            barView.setLayoutParams(lp);
-            float fractionVisible = 1f - Math.min(1f, Math.abs(margin) / (float) fullHeight);
-            barView.setAlpha(fractionVisible);
-        });
-        animator.addListener(new AnimatorListenerAdapter() {
-            private boolean cancelled = false;
-
-            @Override
-            public void onAnimationCancel(Animator animation) {
-                cancelled = true;
-            }
-
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                barView.setTag(R.id.layoutToolBar, null);
-                if (!cancelled) {
-                    lp.topMargin = targetMargin;
-                    barView.setLayoutParams(lp);
-                    barView.setAlpha(show ? 1f : 0f);
-                }
-            }
-        });
-        barView.setTag(R.id.layoutToolBar, animator);
-        animator.start();
+        float targetY = show ? 0f : -height;
+        barView.animate().cancel();
+        barView.animate()
+                .translationY(targetY)
+                .alpha(show ? 1f : 0f)
+                .setDuration(220)
+                .setInterpolator(new DecelerateInterpolator())
+                .withStartAction(() -> {
+                    if (show) {
+                        barView.setClickable(true);
+                    }
+                })
+                .withEndAction(() -> {
+                    if (!show) {
+                        barView.setClickable(false);
+                    }
+                })
+                .start();
     }
 }
