@@ -68,18 +68,33 @@
             android:layout_toEndOf="@id/songImgCard"
             android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/txtSong"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:ellipsize="marquee"
-                android:fontFamily="sans-serif-medium"
-                android:marqueeRepeatLimit="marquee_forever"
-                android:scrollHorizontally="true"
-                android:singleLine="true"
-                android:text="Song Name"
-                android:textColor="#F5F7FA"
-                android:textSize="15sp" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <com.example.parrot.NowPlayingBarsView
+                    android:id="@+id/nowPlayingBars"
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:layout_marginEnd="7dp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/txtSong"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="marquee"
+                    android:fontFamily="sans-serif-medium"
+                    android:marqueeRepeatLimit="marquee_forever"
+                    android:scrollHorizontally="true"
+                    android:singleLine="true"
+                    android:text="Song Name"
+                    android:textColor="#F5F7FA"
+                    android:textSize="15sp" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/txtartist"

@@ -1,9 +1,13 @@
 package com.example.parrot;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.View;
@@ -39,6 +43,39 @@ public class GroupSongsActivity extends AppCompatActivity {
     private FavouritesManager favManager;
     private BaseAdapter songsAdapter;
     private boolean isMultiSelectMode = false;
+
+    private final BroadcastReceiver playbackStateReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (songsAdapter != null && !isFinishing() && !isDestroyed()) {
+                songsAdapter.notifyDataSetChanged();
+            }
+        }
+    };
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(MusicService.BROADCAST_UPDATE_UI);
+        filter.addAction(AccentColorHelper.ACTION_ACCENT_COLOR_CHANGED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(playbackStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(playbackStateReceiver, filter);
+        }
+        if (songsAdapter != null) {
+            songsAdapter.notifyDataSetChanged();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        try {
+            unregisterReceiver(playbackStateReceiver);
+        } catch (Exception ignored) {}
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -304,6 +341,7 @@ public class GroupSongsActivity extends AppCompatActivity {
                 
                 String path = songList.get(i);
                 img.setTag(path);
+                NowPlayingBarsView.bindRow(v, path, txt);
                 
                 if (btnMore != null) {
                     btnMore.setOnClickListener(view1 -> {

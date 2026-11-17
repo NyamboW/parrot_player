@@ -1,7 +1,9 @@
 package com.example.parrot;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
@@ -73,6 +75,15 @@ public class Music_Fragment extends Fragment {
     private boolean isMultiSelectMode = false;
     private boolean permissionGranted = false;
 
+    private final BroadcastReceiver playbackStateReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (songsAdapter != null && isAdded()) {
+                songsAdapter.notifyDataSetChanged();
+            }
+        }
+    };
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -106,9 +117,25 @@ public class Music_Fragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(MusicService.BROADCAST_UPDATE_UI);
+        filter.addAction(AccentColorHelper.ACTION_ACCENT_COLOR_CHANGED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requireContext().registerReceiver(playbackStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            requireContext().registerReceiver(playbackStateReceiver, filter);
+        }
         if (permissionGranted) {
             loadSongs();
         }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        try {
+            requireContext().unregisterReceiver(playbackStateReceiver);
+        } catch (Exception ignored) {}
     }
 
     private void setupMultiSelect() {
@@ -433,6 +460,7 @@ public class Music_Fragment extends Fragment {
                 
                 String path = filteredSongList.get(i);
                 img.setTag(path);
+                NowPlayingBarsView.bindRow(v, path, txt);
                 
                 if (btnMore != null) {
                     btnMore.setOnClickListener(view1 -> {

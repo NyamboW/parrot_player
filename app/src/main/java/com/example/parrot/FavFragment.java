@@ -1,7 +1,9 @@
 package com.example.parrot;
 
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.media.MediaMetadataRetriever;
 import android.os.Build;
@@ -55,6 +57,15 @@ public class FavFragment extends Fragment {
     private String[] displayNames;
     private BaseAdapter adapter;
     private boolean isMultiSelectMode = false;
+
+    private final BroadcastReceiver playbackStateReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (adapter != null && isAdded()) {
+                adapter.notifyDataSetChanged();
+            }
+        }
+    };
 
     private ExecutorService executorService;
     private HashMap<String, String> artistCache = new HashMap<>();
@@ -228,7 +239,23 @@ public class FavFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(MusicService.BROADCAST_UPDATE_UI);
+        filter.addAction(AccentColorHelper.ACTION_ACCENT_COLOR_CHANGED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requireContext().registerReceiver(playbackStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            requireContext().registerReceiver(playbackStateReceiver, filter);
+        }
         loadFavourites();
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        try {
+            requireContext().unregisterReceiver(playbackStateReceiver);
+        } catch (Exception ignored) {}
     }
 
     private void loadFavourites() {
@@ -376,6 +403,7 @@ public class FavFragment extends Fragment {
 
                 String path = filteredFavSongs.get(i);
                 img.setTag(path);
+                NowPlayingBarsView.bindRow(v, path, txt);
                 
                 if (artistCache.containsKey(path)) {
                     if (txtArtist != null) txtArtist.setText(artistCache.get(path));

@@ -63,6 +63,17 @@ public class MusicService extends Service {
     public static final String BROADCAST_UPDATE_UI = "com.example.parrot.UPDATE_UI";
     public static final String BROADCAST_QUEUE_UPDATED = "com.example.parrot.QUEUE_UPDATED";
 
+    private static volatile String activeSongPath = null;
+    private static volatile boolean activeIsPlaying = false;
+
+    public static String getActiveSongPath() {
+        return activeSongPath;
+    }
+
+    public static boolean isActivelyPlaying() {
+        return activeIsPlaying;
+    }
+
     private final IBinder binder = new MyBinder();
     
     private MediaPlayer mediaPlayer;
@@ -615,6 +626,8 @@ public class MusicService extends Service {
         
         String songPath = mySongs.get(position);
         boolean playing = (mediaPlayer != null && !isPrepared) || isPlaying();
+        activeSongPath = songPath;
+        activeIsPlaying = playing;
         int duration = getDuration();
         int currentPos = getCurrentPosition();
 
@@ -917,6 +930,8 @@ public class MusicService extends Service {
             position = restored.position;
             restoredSeekPosition = restored.seekPosition;
             restoredDuration = restored.duration;
+            activeSongPath = getCurrentSongPath();
+            activeIsPlaying = false;
             AlbumArtLoader.getInstance().preloadFullArt(getCurrentSongPath());
         }
     }
@@ -1121,6 +1136,7 @@ public class MusicService extends Service {
     }
 
     private void closePlayerService() {
+        activeIsPlaying = false;
         stopPeriodicStateSave();
         stateHandler.removeCallbacks(sleepTimerRunnable);
         saveCurrentState(true);
@@ -1141,6 +1157,7 @@ public class MusicService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        activeIsPlaying = false;
         stopPeriodicStateSave();
         stateHandler.removeCallbacks(sleepTimerRunnable);
         if (audioDeviceReceiver != null) {
