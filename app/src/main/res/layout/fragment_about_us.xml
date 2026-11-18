@@ -165,7 +165,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"
-                android:text="Developed by AttomaticSystems"
+                android:text="Developed by attomaticsystems"
                 android:textColor="#F5F7FA"
                 android:textSize="14sp"
                 android:textStyle="bold" />
