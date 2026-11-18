@@ -4,6 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#0B0B0F"
+    android:layout_marginBottom="14dp"
     android:fillViewport="true">
 
     <LinearLayout
@@ -176,7 +177,9 @@
                 android:layout_marginTop="3dp"
                 android:text="© attomaticsystems • All rights reserved"
                 android:textColor="#8A93A2"
-                android:textSize="12sp" />
+                android:textSize="12sp"
+
+                />
         </LinearLayout>
 
     </LinearLayout>
