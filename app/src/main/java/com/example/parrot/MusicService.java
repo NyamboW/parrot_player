@@ -34,6 +34,8 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Locale;
 import java.util.Random;
 
 import android.appwidget.AppWidgetManager;
@@ -86,7 +88,9 @@ public class MusicService extends Service {
     private int playToken = 0;
     private ArrayList<String> mySongs = new ArrayList<>();
     private int position = 0;
-    private int preselectedShufflePos = -1;
+    private final ArrayList<Integer> shuffleOrder = new ArrayList<>();
+    private int shuffleCursor = -1;
+    private final Random shuffleRandom = new Random();
     private boolean isShuffle = false;
     private boolean isRepeat = false;
     
@@ -290,6 +294,7 @@ public class MusicService extends Service {
                         position = intent.getIntExtra("pos", 0);
                         restoredSeekPosition = 0;
                         restoredDuration = 0;
+                        rebuildShuffleOrder(position);
                         stateManager.savePlaylist(mySongs);
                         playSong(position);
                     }
@@ -352,6 +357,9 @@ public class MusicService extends Service {
     public void playSong(int pos) {
         position = pos;
         if (mySongs.isEmpty() || position < 0 || position >= mySongs.size()) return;
+        if (isShuffle) {
+            ensureShuffleDeckSyncedToPosition(position);
+        }
         restoredSeekPosition = 0;
         restoredDuration = 0;
         startPlayback(mySongs.get(position), 0);
@@ -525,13 +533,18 @@ public class MusicService extends Service {
         }
 
         if (isShuffle) {
-            if (preselectedShufflePos >= 0 && preselectedShufflePos < mySongs.size()
-                    && preselectedShufflePos != position) {
-                position = preselectedShufflePos;
+            ensureShuffleDeckValid();
+            if (shuffleOrder.size() <= 1) {
+                position = 0;
             } else {
-                position = pickNextShufflePosition();
+                shuffleCursor++;
+                if (shuffleCursor >= shuffleOrder.size()) {
+                    // Completed full non-repeating cycle of all songs; build a new cycle starting after current
+                    rebuildShuffleOrder(position);
+                    shuffleCursor = Math.min(1, shuffleOrder.size() - 1);
+                }
+                position = shuffleOrder.get(shuffleCursor);
             }
-            preselectedShufflePos = -1;
         } else {
             position = (position + 1) % mySongs.size();
         }
@@ -542,21 +555,99 @@ public class MusicService extends Service {
         if (mySongs.isEmpty()) return;
 
         if (isShuffle) {
-            position = pickNextShufflePosition();
+            ensureShuffleDeckValid();
+            if (shuffleOrder.size() <= 1) {
+                position = 0;
+            } else if (shuffleCursor > 0) {
+                shuffleCursor--;
+                position = shuffleOrder.get(shuffleCursor);
+            } else {
+                shuffleCursor = shuffleOrder.size() - 1;
+                position = shuffleOrder.get(shuffleCursor);
+            }
         } else {
             position = (position - 1 < 0) ? mySongs.size() - 1 : position - 1;
         }
         playSong(position);
     }
 
-    private int pickNextShufflePosition() {
-        if (mySongs.size() <= 1) return 0;
-        Random random = new Random();
-        int nextPos = random.nextInt(mySongs.size());
-        if (nextPos == position) {
-            nextPos = (position + 1 + random.nextInt(mySongs.size() - 1)) % mySongs.size();
+    /**
+     * Builds a Fisher-Yates shuffled permutation of all songs with currentPos at index 0,
+     * ensuring every song plays once before any song repeats and preventing duplicate titles back-to-back.
+     */
+    private void rebuildShuffleOrder(int currentPos) {
+        shuffleOrder.clear();
+        if (mySongs == null || mySongs.isEmpty()) {
+            shuffleCursor = -1;
+            return;
         }
-        return nextPos;
+        int safeCurrent = Math.max(0, Math.min(currentPos, mySongs.size() - 1));
+        shuffleOrder.add(safeCurrent);
+        shuffleCursor = 0;
+
+        if (mySongs.size() == 1) {
+            return;
+        }
+
+        ArrayList<Integer> remaining = new ArrayList<>(mySongs.size() - 1);
+        for (int i = 0; i < mySongs.size(); i++) {
+            if (i != safeCurrent) {
+                remaining.add(i);
+            }
+        }
+        Collections.shuffle(remaining, shuffleRandom);
+
+        // Spread out any duplicate song titles so identical tracks never play back-to-back
+        String prevTitle = normalizeTitleForShuffle(mySongs.get(safeCurrent));
+        for (int i = 0; i < remaining.size(); i++) {
+            String candidateTitle = normalizeTitleForShuffle(mySongs.get(remaining.get(i)));
+            if (candidateTitle.equals(prevTitle)) {
+                for (int j = i + 1; j < remaining.size(); j++) {
+                    String swapTitle = normalizeTitleForShuffle(mySongs.get(remaining.get(j)));
+                    if (!swapTitle.equals(prevTitle)) {
+                        Collections.swap(remaining, i, j);
+                        candidateTitle = swapTitle;
+                        break;
+                    }
+                }
+            }
+            prevTitle = candidateTitle;
+        }
+
+        shuffleOrder.addAll(remaining);
+    }
+
+    private String normalizeTitleForShuffle(String path) {
+        if (path == null) return "";
+        return getFileName(path).trim().toLowerCase(Locale.ROOT);
+    }
+
+    private void ensureShuffleDeckValid() {
+        if (mySongs == null || mySongs.isEmpty()) {
+            shuffleOrder.clear();
+            shuffleCursor = -1;
+            return;
+        }
+        if (shuffleOrder.size() != mySongs.size()
+                || shuffleCursor < 0
+                || shuffleCursor >= shuffleOrder.size()) {
+            rebuildShuffleOrder(position);
+        }
+    }
+
+    private void ensureShuffleDeckSyncedToPosition(int targetPos) {
+        ensureShuffleDeckValid();
+        if (shuffleOrder.isEmpty()) return;
+        if (shuffleCursor >= 0 && shuffleCursor < shuffleOrder.size()
+                && shuffleOrder.get(shuffleCursor) == targetPos) {
+            return;
+        }
+        int existingIdx = shuffleOrder.indexOf(targetPos);
+        if (existingIdx >= 0) {
+            shuffleCursor = existingIdx;
+        } else {
+            rebuildShuffleOrder(targetPos);
+        }
     }
 
     private void safeRelease() {
@@ -767,11 +858,13 @@ public class MusicService extends Service {
 
         if (mySongs.size() > 1) {
             if (isShuffle) {
-                if (preselectedShufflePos < 0 || preselectedShufflePos >= mySongs.size()
-                        || preselectedShufflePos == position) {
-                    preselectedShufflePos = pickNextShufflePosition();
+                ensureShuffleDeckValid();
+                if (shuffleCursor + 1 < shuffleOrder.size()) {
+                    loader.preloadFullArt(mySongs.get(shuffleOrder.get(shuffleCursor + 1)));
                 }
-                loader.preloadFullArt(mySongs.get(preselectedShufflePos));
+                if (shuffleCursor - 1 >= 0 && shuffleCursor - 1 < shuffleOrder.size()) {
+                    loader.preloadFullArt(mySongs.get(shuffleOrder.get(shuffleCursor - 1)));
+                }
             } else {
                 int next1 = (position + 1) % mySongs.size();
                 int prev1 = (position - 1 < 0) ? mySongs.size() - 1 : position - 1;
@@ -877,6 +970,13 @@ public class MusicService extends Service {
     
     public void setShuffle(boolean shuffle) {
         isShuffle = shuffle;
+        if (isShuffle) {
+            rebuildShuffleOrder(position);
+        } else {
+            shuffleOrder.clear();
+            shuffleCursor = -1;
+        }
+        preloadNextSongArt();
         if (stateManager != null) {
             stateManager.saveModes(isShuffle, isRepeat);
         }
