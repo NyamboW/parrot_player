@@ -174,7 +174,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="3dp"
-                android:text="© AttomaticSystems • All rights reserved"
+                android:text="© attomaticsystems • All rights reserved"
                 android:textColor="#8A93A2"
                 android:textSize="12sp" />
         </LinearLayout>
