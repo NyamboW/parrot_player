@@ -45,53 +45,99 @@
         <LinearLayout
             android:id="@+id/miniPlayer"
             android:layout_width="match_parent"
-            android:layout_height="68dp"
+            android:layout_height="wrap_content"
             android:layout_gravity="bottom"
-            android:background="#151820"
+            android:background="#151821"
             android:elevation="12dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="16dp"
-            android:paddingEnd="10dp"
+            android:orientation="vertical"
             android:visibility="gone">
 
-            <ImageView
-                android:id="@+id/imgMiniMusic"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:layout_marginEnd="12dp"
-                android:src="@drawable/ic_music"
-                app:tint="#4CAF50" />
+            <!-- Thin Live Progress Bar at Top Edge -->
+            <ProgressBar
+                android:id="@+id/miniProgressBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="2.5dp"
+                android:max="1000"
+                android:progress="0"
+                android:progressBackgroundTint="#252B38"
+                android:progressTint="#4CAF50" />
 
-            <TextView
-                android:id="@+id/miniSongName"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:fontFamily="sans-serif-medium"
-                android:singleLine="true"
-                android:text="No song playing"
-                android:textColor="#F5F7FA"
-                android:textSize="14sp" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="64dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="12dp"
+                android:paddingEnd="8dp">
 
-            <ImageButton
-                android:id="@+id/miniPlayPause"
-                android:layout_width="42dp"
-                android:layout_height="42dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:padding="8dp"
-                android:src="@drawable/ic_play"
-                app:tint="#FFFFFF" />
+                <androidx.cardview.widget.CardView
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="12dp"
+                    app:cardBackgroundColor="#1E2330"
+                    app:cardCornerRadius="10dp"
+                    app:cardElevation="0dp">
 
-            <ImageButton
-                android:id="@+id/miniNext"
-                android:layout_width="42dp"
-                android:layout_height="42dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:padding="8dp"
-                android:src="@drawable/ic_next"
-                app:tint="#FFFFFF" />
+                    <ImageView
+                        android:id="@+id/imgMiniMusic"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:padding="10dp"
+                        android:scaleType="centerCrop"
+                        android:src="@drawable/ic_music"
+                        app:tint="#4CAF50" />
+                </androidx.cardview.widget.CardView>
+
+                <LinearLayout
+                    android:id="@+id/miniTextContainer"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/miniSongName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:fontFamily="sans-serif-medium"
+                        android:singleLine="true"
+                        android:text="No song playing"
+                        android:textColor="#F5F7FA"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/miniArtistName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:ellipsize="end"
+                        android:singleLine="true"
+                        android:text="Parrot Audio Player"
+                        android:textColor="#9AA3B2"
+                        android:textSize="11.5sp" />
+                </LinearLayout>
+
+                <ImageButton
+                    android:id="@+id/miniPlayPause"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_play"
+                    app:tint="#FFFFFF" />
+
+                <ImageButton
+                    android:id="@+id/miniNext"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:padding="8dp"
+                    android:src="@drawable/ic_next"
+                    app:tint="#FFFFFF" />
+            </LinearLayout>
         </LinearLayout>
 
     </FrameLayout>

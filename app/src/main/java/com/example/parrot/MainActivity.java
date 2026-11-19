@@ -1,5 +1,6 @@
 package com.example.parrot;
 
+import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -9,12 +10,17 @@ import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.TypedValue;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
@@ -24,6 +30,7 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -50,10 +57,27 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
     private static final int COLOR_BOTTOM_ICON = Color.parseColor("#E6E8EC");
 
     LinearLayout miniPlayer;
+    LinearLayout miniTextContainer;
+    ProgressBar miniProgressBar;
     TextView miniSongName;
+    TextView miniArtistName;
     ImageView imgMiniMusic;
     ImageButton miniPlayPause;
     ImageButton miniNext;
+    private String miniLoadedSongPath = null;
+    private boolean miniHasActualArt = false;
+    private final Handler miniProgressHandler = new Handler(Looper.getMainLooper());
+    private final Runnable miniProgressRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isBound && musicService != null && miniPlayer != null && miniPlayer.getVisibility() == View.VISIBLE) {
+                int dur = musicService.getDuration();
+                int pos = musicService.getCurrentPosition();
+                updateMiniProgressBar(pos, dur);
+            }
+            miniProgressHandler.postDelayed(this, 400L);
+        }
+    };
     private androidx.appcompat.widget.Toolbar toolbar;
     private boolean areBarsVisible = true;
 
@@ -104,7 +128,10 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
         favManager = new FavouritesManager(this);
 
         miniPlayer = findViewById(R.id.miniPlayer);
+        miniTextContainer = findViewById(R.id.miniTextContainer);
+        miniProgressBar = findViewById(R.id.miniProgressBar);
         miniSongName = findViewById(R.id.miniSongName);
+        miniArtistName = findViewById(R.id.miniArtistName);
         imgMiniMusic = findViewById(R.id.imgMiniMusic);
         miniPlayPause = findViewById(R.id.miniPlayPause);
         miniNext = findViewById(R.id.miniNext);
@@ -130,7 +157,10 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
                 switch (intent.getAction()) {
                     case MusicService.BROADCAST_UPDATE_UI: {
                         String song = intent.getStringExtra("song");
+                        String songPath = intent.getStringExtra("songPath");
                         boolean isPlaying = intent.getBooleanExtra("isPlaying", false);
+                        int duration = intent.getIntExtra("duration", 0);
+                        int currentPos = intent.getIntExtra("currentPosition", 0);
 
                         if (miniPlayer.getVisibility() != View.VISIBLE) {
                             miniPlayer.setVisibility(View.VISIBLE);
@@ -147,6 +177,8 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
                         miniPlayPause.setImageResource(
                                 isPlaying ? R.drawable.ic_pause : R.drawable.ic_play
                         );
+                        updateMiniProgressBar(currentPos, duration);
+                        updateMiniAlbumArtAndArtist(songPath);
                         break;
                     }
                     case MusicService.BROADCAST_QUEUE_UPDATED:
@@ -174,9 +206,7 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
             registerReceiver(miniReceiver, filter);
         }
 
-        miniPlayer.setOnClickListener(v ->
-                startActivity(new Intent(this, PlayerActivity.class))
-        );
+        setupMiniPlayerGestures();
 
         toolbar = findViewById(R.id.layoutToolBar);
         setSupportActionBar(toolbar);
@@ -346,8 +376,11 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
         ImageViewCompat.setImageTintList(btnDrawerAbout,
                 ColorStateList.valueOf(isAbout ? accent : COLOR_BOTTOM_ICON));
 
-        if (imgMiniMusic != null) {
+        if (imgMiniMusic != null && !miniHasActualArt) {
             ImageViewCompat.setImageTintList(imgMiniMusic, ColorStateList.valueOf(accent));
+        }
+        if (miniProgressBar != null) {
+            miniProgressBar.setProgressTintList(ColorStateList.valueOf(accent));
         }
     }
 
@@ -482,6 +515,133 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
         new ParrotEqualizerDialogFragment().show(getSupportFragmentManager(), "eq_drawer");
     }
 
+    private void updateMiniProgressBar(int currentPos, int duration) {
+        if (miniProgressBar == null) return;
+        if (duration > 0) {
+            miniProgressBar.setMax(duration);
+            miniProgressBar.setProgress(Math.max(0, Math.min(duration, currentPos)));
+        } else {
+            miniProgressBar.setMax(1000);
+            miniProgressBar.setProgress(0);
+        }
+    }
+
+    private void updateMiniAlbumArtAndArtist(final String songPath) {
+        if (songPath == null || songPath.isEmpty() || songPath.equals(miniLoadedSongPath)) {
+            return;
+        }
+        miniLoadedSongPath = songPath;
+
+        TrackMetadataHelper.loadTrackInfoAsync(songPath, info -> {
+            if (!isFinishing() && !isDestroyed() && songPath.equals(miniLoadedSongPath) && miniArtistName != null) {
+                if (info != null) {
+                    miniArtistName.setText(info.getArtistAlbumSubtitle());
+                } else {
+                    miniArtistName.setText("Unknown Artist");
+                }
+            }
+        });
+
+        if (imgMiniMusic == null) return;
+        imgMiniMusic.setTag(songPath);
+        AlbumArtLoader loader = AlbumArtLoader.getInstance();
+        Bitmap cached = loader.getBestCachedArt(songPath);
+        if (cached != null) {
+            applyMiniAlbumArtBitmap(cached);
+        } else {
+            applyMiniDefaultArtIcon();
+            if (!loader.hasNoArt(songPath)) {
+                loader.loadThumbArt(songPath, bitmap -> {
+                    if (bitmap != null && !isFinishing() && !isDestroyed() && songPath.equals(imgMiniMusic.getTag())) {
+                        applyMiniAlbumArtBitmap(bitmap);
+                    }
+                });
+            }
+        }
+    }
+
+    private void applyMiniAlbumArtBitmap(Bitmap bitmap) {
+        if (imgMiniMusic == null) return;
+        miniHasActualArt = true;
+        imgMiniMusic.setPadding(0, 0, 0, 0);
+        ImageViewCompat.setImageTintList(imgMiniMusic, null);
+        imgMiniMusic.setImageBitmap(bitmap);
+    }
+
+    private void applyMiniDefaultArtIcon() {
+        if (imgMiniMusic == null) return;
+        miniHasActualArt = false;
+        int pad = (int) (10 * getResources().getDisplayMetrics().density);
+        imgMiniMusic.setPadding(pad, pad, pad, pad);
+        imgMiniMusic.setImageResource(R.drawable.ic_music);
+        ImageViewCompat.setImageTintList(imgMiniMusic,
+                ColorStateList.valueOf(AccentColorHelper.getAccentColor(this)));
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private void setupMiniPlayerGestures() {
+        if (miniPlayer == null) return;
+        final GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            private static final int SWIPE_THRESHOLD = 75;
+            private static final int SWIPE_VELOCITY_THRESHOLD = 120;
+
+            @Override
+            public boolean onDown(MotionEvent e) {
+                return true;
+            }
+
+            @Override
+            public boolean onSingleTapUp(MotionEvent e) {
+                startActivity(new Intent(MainActivity.this, PlayerActivity.class));
+                return true;
+            }
+
+            @Override
+            public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                if (e1 == null || e2 == null) return false;
+                float diffX = e2.getX() - e1.getX();
+                float diffY = e2.getY() - e1.getY();
+                if (Math.abs(diffX) > Math.abs(diffY)
+                        && Math.abs(diffX) > SWIPE_THRESHOLD
+                        && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                    boolean next = diffX < 0;
+                    animateMiniSwipeAndSkip(next);
+                    return true;
+                }
+                return false;
+            }
+        });
+        miniPlayer.setOnTouchListener((v, event) -> detector.onTouchEvent(event));
+    }
+
+    private void animateMiniSwipeAndSkip(final boolean next) {
+        final View target = miniTextContainer != null ? miniTextContainer : miniSongName;
+        if (target == null) {
+            Intent intent = new Intent(this, MusicService.class);
+            intent.setAction(next ? MusicService.ACTION_NEXT : MusicService.ACTION_PREV);
+            startService(intent);
+            return;
+        }
+        final float offset = next ? -36f : 36f;
+        target.animate().cancel();
+        target.animate()
+                .translationX(offset)
+                .alpha(0.35f)
+                .setDuration(90)
+                .withEndAction(() -> {
+                    Intent intent = new Intent(MainActivity.this, MusicService.class);
+                    intent.setAction(next ? MusicService.ACTION_NEXT : MusicService.ACTION_PREV);
+                    startService(intent);
+                    target.setTranslationX(-offset);
+                    target.animate()
+                            .translationX(0f)
+                            .alpha(1f)
+                            .setDuration(140)
+                            .start();
+                })
+                .start();
+    }
+
     @Override
     public void setBarsVisible(boolean visible) {
         if (areBarsVisible == visible) return;
@@ -515,6 +675,15 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
         try {
             startService(intent);
         } catch (IllegalStateException ignored) {}
+
+        miniProgressHandler.removeCallbacks(miniProgressRunnable);
+        miniProgressHandler.post(miniProgressRunnable);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        miniProgressHandler.removeCallbacks(miniProgressRunnable);
     }
 
     @Override
