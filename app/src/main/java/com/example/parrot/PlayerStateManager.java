@@ -23,6 +23,7 @@ public class PlayerStateManager {
     private static final String KEY_DURATION = "duration_ms";
     private static final String KEY_SHUFFLE = "is_shuffle";
     private static final String KEY_REPEAT = "is_repeat";
+    private static final String KEY_REPEAT_MODE = "repeat_mode";
     private static final String KEY_QUEUE = "queue_json";
 
     private final SharedPreferences prefs;
@@ -35,6 +36,7 @@ public class PlayerStateManager {
         public int duration = 0;
         public boolean isShuffle = false;
         public boolean isRepeat = false;
+        public int repeatMode = 0;
 
         public boolean hasValidSong() {
             return !songs.isEmpty() && position >= 0 && position < songs.size();
@@ -54,14 +56,15 @@ public class PlayerStateManager {
     }
 
     public void savePlaybackState(int position, String songPath, int seekPosition, int duration,
-                                  boolean isShuffle, boolean isRepeat, boolean synchronous) {
+                                  boolean isShuffle, int repeatMode, boolean synchronous) {
         SharedPreferences.Editor editor = prefs.edit()
                 .putInt(KEY_POSITION, position)
                 .putString(KEY_SONG_PATH, songPath)
                 .putInt(KEY_SEEK_POSITION, Math.max(0, seekPosition))
                 .putInt(KEY_DURATION, Math.max(0, duration))
                 .putBoolean(KEY_SHUFFLE, isShuffle)
-                .putBoolean(KEY_REPEAT, isRepeat);
+                .putBoolean(KEY_REPEAT, repeatMode == 2)
+                .putInt(KEY_REPEAT_MODE, repeatMode);
         if (synchronous) {
             editor.commit();
         } else {
@@ -76,10 +79,11 @@ public class PlayerStateManager {
                 .apply();
     }
 
-    public void saveModes(boolean isShuffle, boolean isRepeat) {
+    public void saveModes(boolean isShuffle, int repeatMode) {
         prefs.edit()
                 .putBoolean(KEY_SHUFFLE, isShuffle)
-                .putBoolean(KEY_REPEAT, isRepeat)
+                .putBoolean(KEY_REPEAT, repeatMode == 2)
+                .putInt(KEY_REPEAT_MODE, repeatMode)
                 .apply();
     }
 
@@ -87,6 +91,7 @@ public class PlayerStateManager {
         RestoredState state = new RestoredState();
         state.isShuffle = prefs.getBoolean(KEY_SHUFFLE, false);
         state.isRepeat = prefs.getBoolean(KEY_REPEAT, false);
+        state.repeatMode = prefs.getInt(KEY_REPEAT_MODE, state.isRepeat ? 2 : 0);
         state.seekPosition = Math.max(0, prefs.getInt(KEY_SEEK_POSITION, 0));
         state.duration = Math.max(0, prefs.getInt(KEY_DURATION, 0));
 

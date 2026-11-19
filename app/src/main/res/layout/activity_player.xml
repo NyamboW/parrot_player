@@ -28,21 +28,43 @@
             android:src="@drawable/ic_back"
             android:tint="#FFFFFF" />
 
-        <TextView
-            android:id="@+id/txtSong"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:ellipsize="marquee"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:marqueeRepeatLimit="marquee_forever"
+            android:orientation="vertical"
             android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:singleLine="true"
-            android:text="Loading song..."
-            android:textColor="#FFFFFF"
-            android:textSize="16sp" />
+            android:paddingEnd="12dp">
+
+            <TextView
+                android:id="@+id/txtSong"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="marquee"
+                android:focusable="true"
+                android:focusableInTouchMode="true"
+                android:fontFamily="sans-serif-medium"
+                android:marqueeRepeatLimit="marquee_forever"
+                android:singleLine="true"
+                android:text="Loading song..."
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/txtArtistAlbum"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:ellipsize="end"
+                android:focusable="true"
+                android:singleLine="true"
+                android:text="Unknown Artist"
+                android:textColor="#9AA3B2"
+                android:textSize="12.5sp" />
+        </LinearLayout>
 
         <ImageButton
             android:id="@+id/btnEq"
@@ -207,10 +229,57 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp"
+        android:paddingStart="20dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="20dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
+
+        <!-- Audiophile Quality Badge & A-B Loop Bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/txtAudioQualityPill"
+                android:layout_width="wrap_content"
+                android:layout_height="26dp"
+                android:background="@drawable/card_surface_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:paddingStart="11dp"
+                android:paddingEnd="11dp"
+                android:text="AUDIO"
+                android:textColor="#9AA3B2"
+                android:textSize="11sp" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/txtAbLoopPill"
+                android:layout_width="wrap_content"
+                android:layout_height="26dp"
+                android:background="@drawable/card_surface_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:paddingStart="11dp"
+                android:paddingEnd="11dp"
+                android:text="A–B Loop"
+                android:textColor="#9AA3B2"
+                android:textSize="11sp" />
+        </LinearLayout>
 
         <!-- SeekBar -->
         <SeekBar

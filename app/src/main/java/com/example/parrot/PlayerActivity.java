@@ -54,7 +54,7 @@ public class PlayerActivity extends AppCompatActivity {
     ArrayList<String> mySongs;
     int position = 0;
 
-    TextView txtSong, txtStart, txtEnd;
+    TextView txtSong, txtArtistAlbum, txtAudioQualityPill, txtAbLoopPill, txtStart, txtEnd;
     SeekBar seekBar;
     ImageView imgView;
     CardView imgViewCard;
@@ -71,11 +71,14 @@ public class PlayerActivity extends AppCompatActivity {
     private int activeLyricLineIndex = -1;
     private boolean isLyricsOverlayVisible = false;
 
+    private TrackMetadataHelper.TrackInfo currentTrackInfo = null;
+    private String metadataLoadedForPath = null;
+
     FavouritesManager favManager;
     String currentSongPath;
 
     boolean isShuffle = false;
-    boolean isRepeat = false;
+    int repeatMode = MusicService.REPEAT_OFF;
     private boolean shuffleToggledBeforeBind = false;
     private boolean repeatToggledBeforeBind = false;
     private boolean isUserSeeking = false;
@@ -139,9 +142,13 @@ public class PlayerActivity extends AppCompatActivity {
                     isShuffle = intent.getBooleanExtra("isShuffle", false);
                     updateToggleButton(btnShuffle, isShuffle);
                 }
-                if (intent.hasExtra("isRepeat") && !repeatToggledBeforeBind) {
-                    isRepeat = intent.getBooleanExtra("isRepeat", false);
-                    updateToggleButton(btnRepeat, isRepeat);
+                if (intent.hasExtra("repeatMode") && !repeatToggledBeforeBind) {
+                    repeatMode = intent.getIntExtra("repeatMode", MusicService.REPEAT_OFF);
+                    updateRepeatButton();
+                } else if (intent.hasExtra("isRepeat") && !repeatToggledBeforeBind) {
+                    boolean repOne = intent.getBooleanExtra("isRepeat", false);
+                    repeatMode = repOne ? MusicService.REPEAT_ONE : MusicService.REPEAT_OFF;
+                    updateRepeatButton();
                 }
 
                 if (songPath != null && !songPath.equals(imgView.getTag())) {
@@ -152,8 +159,10 @@ public class PlayerActivity extends AppCompatActivity {
                 if (songPath != null) {
                     currentSongPath = songPath;
                     updateFavIcon(false);
+                    loadTrackMetadata(songPath);
                     loadLyricsForSong(songPath);
                     syncLyricsToPosition(currentPos, duration);
+                    updateAbLoopPillStyle();
                 }
             } else if (intent.getAction().equals("com.example.parrot.CLOSE_APP")) {
                 finishAffinity();
@@ -169,6 +178,9 @@ public class PlayerActivity extends AppCompatActivity {
         favManager = new FavouritesManager(this);
 
         txtSong = findViewById(R.id.txtSong);
+        txtArtistAlbum = findViewById(R.id.txtArtistAlbum);
+        txtAudioQualityPill = findViewById(R.id.txtAudioQualityPill);
+        txtAbLoopPill = findViewById(R.id.txtAbLoopPill);
         txtStart = findViewById(R.id.txtSongStart);
         txtEnd = findViewById(R.id.txtSongEnd);
         imgView = findViewById(R.id.imgView);
@@ -225,6 +237,7 @@ public class PlayerActivity extends AppCompatActivity {
                 setSongTitle(cleanFileName(new File(initialSongPath).getName()));
                 currentSongPath = initialSongPath;
                 updateFavIcon(false);
+                loadTrackMetadata(initialSongPath);
                 loadLyricsForSong(initialSongPath);
             }
 
@@ -263,6 +276,19 @@ public class PlayerActivity extends AppCompatActivity {
         if (btnCloseLyricsOverlay != null) {
             btnCloseLyricsOverlay.setOnClickListener(v -> setLyricsOverlayVisible(false));
         }
+        if (txtArtistAlbum != null) {
+            txtArtistAlbum.setOnClickListener(v -> onArtistAlbumSubtitleClicked());
+        }
+        if (txtAudioQualityPill != null) {
+            txtAudioQualityPill.setOnClickListener(v -> {
+                if (currentTrackInfo != null) {
+                    TrackMetadataHelper.showTrackDetailsDialog(this, currentTrackInfo);
+                }
+            });
+        }
+        if (txtAbLoopPill != null) {
+            txtAbLoopPill.setOnClickListener(v -> cycleAbLoopState());
+        }
 
         btnPlay.setOnClickListener(v -> triggerPlayPause());
         btnNext.setOnClickListener(v -> triggerNext());
@@ -281,15 +307,21 @@ public class PlayerActivity extends AppCompatActivity {
         });
 
         btnRepeat.setOnClickListener(v -> {
-            isRepeat = !isRepeat;
+            repeatMode = (repeatMode + 1) % 3;
             if (isBound && musicService != null) {
-                musicService.setRepeat(isRepeat);
+                musicService.setRepeatMode(repeatMode);
                 repeatToggledBeforeBind = false;
             } else {
                 repeatToggledBeforeBind = true;
             }
-            updateToggleButton(btnRepeat, isRepeat);
+            updateRepeatButton();
             popView(btnRepeat);
+            String label = (repeatMode == MusicService.REPEAT_ALL)
+                    ? "Repeat All"
+                    : (repeatMode == MusicService.REPEAT_ONE)
+                    ? "Repeat One"
+                    : "Repeat Off";
+            Toast.makeText(this, label, Toast.LENGTH_SHORT).show();
         });
 
         btnFav.setOnClickListener(v -> {
@@ -348,14 +380,14 @@ public class PlayerActivity extends AppCompatActivity {
         }
 
         if (repeatToggledBeforeBind) {
-            musicService.setRepeat(isRepeat);
+            musicService.setRepeatMode(repeatMode);
             repeatToggledBeforeBind = false;
         } else {
-            isRepeat = musicService.isRepeat();
+            repeatMode = musicService.getRepeatMode();
         }
 
         updateToggleButton(btnShuffle, isShuffle);
-        updateToggleButton(btnRepeat, isRepeat);
+        updateRepeatButton();
 
         btnPlay.setImageResource(musicService.isPlaying() ? R.drawable.ic_pause : R.drawable.ic_play);
 
@@ -379,8 +411,10 @@ public class PlayerActivity extends AppCompatActivity {
         if (songPath != null) {
             currentSongPath = songPath;
             updateFavIcon(false);
+            loadTrackMetadata(songPath);
             loadLyricsForSong(songPath);
             syncLyricsToPosition(currentPos, duration);
+            updateAbLoopPillStyle();
             if (!songPath.equals(imgView.getTag())) {
                 imgView.setTag(songPath);
                 loadAlbumArt(songPath, false);
@@ -566,6 +600,138 @@ public class PlayerActivity extends AppCompatActivity {
         ImageViewCompat.setImageTintList(button, ColorStateList.valueOf(enabled ? accent : COLOR_WHITE));
     }
 
+    private void updateRepeatButton() {
+        if (btnRepeat == null) return;
+        int accent = AccentColorHelper.getAccentColor(this);
+        if (repeatMode == MusicService.REPEAT_ONE) {
+            btnRepeat.setImageResource(R.drawable.ic_repeat_one);
+            btnRepeat.setAlpha(1.0f);
+            ImageViewCompat.setImageTintList(btnRepeat, ColorStateList.valueOf(accent));
+        } else if (repeatMode == MusicService.REPEAT_ALL) {
+            btnRepeat.setImageResource(R.drawable.ic_repeat);
+            btnRepeat.setAlpha(1.0f);
+            ImageViewCompat.setImageTintList(btnRepeat, ColorStateList.valueOf(accent));
+        } else {
+            btnRepeat.setImageResource(R.drawable.ic_repeat);
+            btnRepeat.setAlpha(0.5f);
+            ImageViewCompat.setImageTintList(btnRepeat, ColorStateList.valueOf(COLOR_WHITE));
+        }
+    }
+
+    private void loadTrackMetadata(final String path) {
+        if (path == null || path.isEmpty() || path.equals(metadataLoadedForPath)) {
+            return;
+        }
+        metadataLoadedForPath = path;
+
+        TrackMetadataHelper.loadTrackInfoAsync(path, info -> {
+            if (isFinishing() || isDestroyed() || !path.equals(currentSongPath)) {
+                return;
+            }
+            currentTrackInfo = info;
+            if (txtArtistAlbum != null && info != null) {
+                txtArtistAlbum.setText(info.getArtistAlbumSubtitle());
+            }
+            if (txtAudioQualityPill != null && info != null) {
+                txtAudioQualityPill.setText(info.getQualityBadgeText());
+            }
+        });
+    }
+
+    private void onArtistAlbumSubtitleClicked() {
+        if (currentTrackInfo == null) return;
+        boolean hasArtist = currentTrackInfo.hasKnownArtist();
+        boolean hasAlbum = currentTrackInfo.hasKnownAlbum();
+
+        if (hasArtist && hasAlbum) {
+            String[] choices = new String[]{
+                    "Go to Artist: " + currentTrackInfo.artist,
+                    "Go to Album: " + currentTrackInfo.album,
+                    "Track Technical Info"
+            };
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle(currentTrackInfo.title)
+                    .setItems(choices, (dialog, which) -> {
+                        if (which == 0) {
+                            openGroupSongs("artist", currentTrackInfo.artist);
+                        } else if (which == 1) {
+                            openGroupSongs("album", currentTrackInfo.album);
+                        } else {
+                            TrackMetadataHelper.showTrackDetailsDialog(this, currentTrackInfo);
+                        }
+                    })
+                    .show();
+        } else if (hasArtist) {
+            openGroupSongs("artist", currentTrackInfo.artist);
+        } else if (hasAlbum) {
+            openGroupSongs("album", currentTrackInfo.album);
+        } else {
+            TrackMetadataHelper.showTrackDetailsDialog(this, currentTrackInfo);
+        }
+    }
+
+    private void openGroupSongs(String type, String name) {
+        Intent intent = new Intent(this, GroupSongsActivity.class);
+        intent.putExtra("type", type);
+        intent.putExtra("name", name);
+        startActivity(intent);
+    }
+
+    private void cycleAbLoopState() {
+        if (!isBound || musicService == null) return;
+        int startMs = musicService.getAbLoopStartMs();
+        int endMs = musicService.getAbLoopEndMs();
+        int currentPos = musicService.getCurrentPosition();
+
+        if (startMs < 0) {
+            musicService.setAbLoopStart(currentPos);
+            Toast.makeText(this, "Point A set at " + formatTime(currentPos) + " — tap again for B", Toast.LENGTH_SHORT).show();
+        } else if (endMs < 0) {
+            if (currentPos <= startMs + 500) {
+                Toast.makeText(this, "Point B must be after " + formatTime(startMs), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            musicService.setAbLoopEnd(currentPos);
+            Toast.makeText(this, "Looping " + formatTime(startMs) + " – " + formatTime(currentPos), Toast.LENGTH_SHORT).show();
+        } else {
+            musicService.clearAbLoop();
+            Toast.makeText(this, "A–B Loop cleared", Toast.LENGTH_SHORT).show();
+        }
+        updateAbLoopPillStyle();
+    }
+
+    private void updateAbLoopPillStyle() {
+        if (txtAbLoopPill == null) return;
+        int accent = AccentColorHelper.getAccentColor(this);
+        float density = getResources().getDisplayMetrics().density;
+        int startMs = (isBound && musicService != null) ? musicService.getAbLoopStartMs() : -1;
+        int endMs = (isBound && musicService != null) ? musicService.getAbLoopEndMs() : -1;
+
+        if (startMs >= 0 && endMs > startMs) {
+            txtAbLoopPill.setText("A–B: " + formatTime(startMs) + "–" + formatTime(endMs) + " ✕");
+            txtAbLoopPill.setTextColor(accent);
+            txtAbLoopPill.setBackground(AccentColorHelper.createRoundedRect(
+                    AccentColorHelper.withAlpha(accent, 0x26),
+                    AccentColorHelper.withAlpha(accent, 0x66),
+                    (int) (1 * density),
+                    13f * density
+            ));
+        } else if (startMs >= 0) {
+            txtAbLoopPill.setText("A: " + formatTime(startMs) + " • Set B");
+            txtAbLoopPill.setTextColor(accent);
+            txtAbLoopPill.setBackground(AccentColorHelper.createRoundedRect(
+                    AccentColorHelper.withAlpha(accent, 0x1A),
+                    AccentColorHelper.withAlpha(accent, 0x50),
+                    (int) (1 * density),
+                    13f * density
+            ));
+        } else {
+            txtAbLoopPill.setText("A–B Loop");
+            txtAbLoopPill.setTextColor(Color.parseColor("#9AA3B2"));
+            txtAbLoopPill.setBackgroundResource(R.drawable.card_surface_bg);
+        }
+    }
+
     private void applyAccentTheme() {
         int accent = AccentColorHelper.getAccentColor(this);
         if (seekBar != null) {
@@ -581,9 +747,10 @@ public class PlayerActivity extends AppCompatActivity {
             txtLyricsBadge.setTextColor(accent);
         }
         updateToggleButton(btnShuffle, isShuffle);
-        updateToggleButton(btnRepeat, isRepeat);
+        updateRepeatButton();
         updateFavIcon(false);
         updateLyricsButtonState();
+        updateAbLoopPillStyle();
     }
 
     private void setSongTitle(String title) {

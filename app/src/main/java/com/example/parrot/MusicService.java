@@ -65,6 +65,10 @@ public class MusicService extends Service {
     public static final String BROADCAST_UPDATE_UI = "com.example.parrot.UPDATE_UI";
     public static final String BROADCAST_QUEUE_UPDATED = "com.example.parrot.QUEUE_UPDATED";
 
+    public static final int REPEAT_OFF = 0;
+    public static final int REPEAT_ALL = 1;
+    public static final int REPEAT_ONE = 2;
+
     private static volatile String activeSongPath = null;
     private static volatile boolean activeIsPlaying = false;
     private static volatile MusicService activeInstance = null;
@@ -92,7 +96,9 @@ public class MusicService extends Service {
     private int shuffleCursor = -1;
     private final Random shuffleRandom = new Random();
     private boolean isShuffle = false;
-    private boolean isRepeat = false;
+    private int repeatMode = REPEAT_OFF;
+    private int abLoopStartMs = -1;
+    private int abLoopEndMs = -1;
     
     private QueueManager queueManager = new QueueManager();
     private PlayerStateManager stateManager;
@@ -370,6 +376,10 @@ public class MusicService extends Service {
         final int token = ++playToken;
         isPrepared = false;
         crossfadeTriggered = false;
+        if (repeatMode != REPEAT_ONE) {
+            abLoopStartMs = -1;
+            abLoopEndMs = -1;
+        }
         final boolean shouldFadeIn = incomingFadeIn && crossfadeSeconds > 0;
         incomingFadeIn = false;
         restoredSeekPosition = Math.max(0, initialSeekMs);
@@ -421,10 +431,18 @@ public class MusicService extends Service {
             mp.setOnCompletionListener(completedMp -> {
                 if (token != playToken || completedMp != mediaPlayer) return;
                 stopPeriodicStateSave();
-                if (isRepeat) {
+                if (repeatMode == REPEAT_ONE) {
                     playSong(position);
                 } else if (!queueManager.isEmpty()) {
                     playNextFromQueue();
+                } else if (repeatMode == REPEAT_OFF && isAtEndOfPlaylistCycle()) {
+                    try {
+                        completedMp.seekTo(0);
+                    } catch (Exception ignored) {}
+                    updateMediaSession();
+                    showNotification(R.drawable.ic_play);
+                    broadcastUIUpdate();
+                    saveCurrentState(false);
                 } else {
                     nextSong();
                 }
@@ -739,7 +757,8 @@ public class MusicService extends Service {
         intent.putExtra("duration", duration);
         intent.putExtra("currentPosition", currentPos);
         intent.putExtra("isShuffle", isShuffle);
-        intent.putExtra("isRepeat", isRepeat);
+        intent.putExtra("isRepeat", repeatMode == REPEAT_ONE);
+        intent.putExtra("repeatMode", repeatMode);
         sendBroadcast(intent);
         
         updateWidget(songPath);
@@ -978,23 +997,67 @@ public class MusicService extends Service {
         }
         preloadNextSongArt();
         if (stateManager != null) {
-            stateManager.saveModes(isShuffle, isRepeat);
+            stateManager.saveModes(isShuffle, repeatMode);
         }
     }
 
     public boolean isShuffle() {
         return isShuffle;
     }
-    
-    public void setRepeat(boolean repeat) {
-        isRepeat = repeat;
+
+    public void setRepeatMode(int mode) {
+        if (mode < REPEAT_OFF || mode > REPEAT_ONE) {
+            mode = REPEAT_OFF;
+        }
+        repeatMode = mode;
         if (stateManager != null) {
-            stateManager.saveModes(isShuffle, isRepeat);
+            stateManager.saveModes(isShuffle, repeatMode);
         }
     }
 
+    public int getRepeatMode() {
+        return repeatMode;
+    }
+
+    public void setRepeat(boolean repeat) {
+        setRepeatMode(repeat ? REPEAT_ONE : REPEAT_OFF);
+    }
+
     public boolean isRepeat() {
-        return isRepeat;
+        return repeatMode == REPEAT_ONE;
+    }
+
+    public void setAbLoopStart(int startMs) {
+        abLoopStartMs = Math.max(0, startMs);
+        abLoopEndMs = -1;
+    }
+
+    public void setAbLoopEnd(int endMs) {
+        if (abLoopStartMs >= 0 && endMs > abLoopStartMs + 500) {
+            abLoopEndMs = endMs;
+        }
+    }
+
+    public void clearAbLoop() {
+        abLoopStartMs = -1;
+        abLoopEndMs = -1;
+    }
+
+    public int getAbLoopStartMs() {
+        return abLoopStartMs;
+    }
+
+    public int getAbLoopEndMs() {
+        return abLoopEndMs;
+    }
+
+    private boolean isAtEndOfPlaylistCycle() {
+        if (mySongs == null || mySongs.isEmpty()) return true;
+        if (isShuffle) {
+            ensureShuffleDeckValid();
+            return shuffleCursor >= shuffleOrder.size() - 1;
+        }
+        return position >= mySongs.size() - 1;
     }
 
     public boolean playMatchingSong(String query) {
@@ -1098,7 +1161,7 @@ public class MusicService extends Service {
         if (stateManager == null) return;
         PlayerStateManager.RestoredState restored = stateManager.restore();
         isShuffle = restored.isShuffle;
-        isRepeat = restored.isRepeat;
+        repeatMode = restored.repeatMode;
         if (!restored.queue.isEmpty()) {
             queueManager.addAllToQueue(restored.queue);
         }
@@ -1123,7 +1186,7 @@ public class MusicService extends Service {
                 getCurrentPosition(),
                 getDuration(),
                 isShuffle,
-                isRepeat,
+                repeatMode,
                 synchronous
         );
     }
@@ -1199,9 +1262,15 @@ public class MusicService extends Service {
     }
 
     private void checkTrackTransition() {
-        if (mediaPlayer == null || !isPrepared || isRepeat || crossfadeTriggered) return;
-        int duration = getDuration();
+        if (mediaPlayer == null || !isPrepared) return;
         int currentPos = getCurrentPosition();
+        if (abLoopStartMs >= 0 && abLoopEndMs > abLoopStartMs && currentPos >= abLoopEndMs) {
+            seekTo(abLoopStartMs);
+            return;
+        }
+        if (repeatMode == REPEAT_ONE || crossfadeTriggered) return;
+        if (repeatMode == REPEAT_OFF && queueManager.isEmpty() && isAtEndOfPlaylistCycle()) return;
+        int duration = getDuration();
         if (duration <= 6000 || currentPos <= 1000) return;
 
         int remaining = duration - currentPos;
