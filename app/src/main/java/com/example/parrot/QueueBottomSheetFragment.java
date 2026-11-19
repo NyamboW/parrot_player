@@ -167,6 +167,7 @@ public class QueueBottomSheetFragment extends BottomSheetDialogFragment {
 
                 String path = queue.get(position);
                 img.setTag(path);
+                TrackMetadataHelper.bindDuration(v.findViewById(R.id.txtSongDuration), path);
 
                 if (rightActionContainer != null) {
                     rightActionContainer.removeAllViews();

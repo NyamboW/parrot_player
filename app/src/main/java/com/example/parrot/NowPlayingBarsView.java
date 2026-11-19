@@ -117,5 +117,6 @@ public class NowPlayingBarsView extends View {
         if (txtSong != null) {
             txtSong.setTextColor(isCurrentSong ? accent : 0xFFF5F7FA);
         }
+        TrackMetadataHelper.bindDuration(rowView.findViewById(R.id.txtSongDuration), songPath);
     }
 }

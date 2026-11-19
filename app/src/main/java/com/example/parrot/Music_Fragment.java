@@ -336,6 +336,11 @@ public class Music_Fragment extends Fragment {
                     artist = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST));
                 } catch (Exception e) {}
 
+                try {
+                    long durationMs = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION));
+                    TrackMetadataHelper.cacheDuration(path, durationMs);
+                } catch (Exception ignored) {}
+
                 songList.add(path);
                 artistList.add(artist);
             }

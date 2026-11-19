@@ -8,9 +8,12 @@ import android.media.MediaMetadataRetriever;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.LruCache;
+import android.view.View;
+import android.widget.TextView;
 
 import java.io.File;
 import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -106,10 +109,88 @@ public final class TrackMetadataHelper {
     }
 
     private static final LruCache<String, TrackInfo> cache = new LruCache<>(250);
+    private static final ConcurrentHashMap<String, Long> durationCache = new ConcurrentHashMap<>();
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private static final ExecutorService durationExecutor = Executors.newSingleThreadExecutor();
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private TrackMetadataHelper() {}
+
+    public static void cacheDuration(String path, long durationMs) {
+        if (path != null && !path.isEmpty() && durationMs > 0) {
+            durationCache.put(path, durationMs);
+        }
+    }
+
+    public static String formatDuration(long durationMs) {
+        long totalSec = Math.max(0L, durationMs) / 1000L;
+        long hours = totalSec / 3600L;
+        long minutes = (totalSec % 3600L) / 60L;
+        long seconds = totalSec % 60L;
+        if (hours > 0) {
+            return String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds);
+        }
+        return String.format(Locale.US, "%d:%02d", minutes, seconds);
+    }
+
+    public static void bindDuration(final TextView txtDuration, final String path) {
+        if (txtDuration == null) return;
+        if (path == null || path.isEmpty()) {
+            txtDuration.setTag(null);
+            txtDuration.setVisibility(View.GONE);
+            return;
+        }
+        txtDuration.setTag(path);
+
+        Long cachedDur = durationCache.get(path);
+        if (cachedDur == null) {
+            TrackInfo info = cache.get(path);
+            if (info != null && info.durationMs > 0) {
+                cachedDur = info.durationMs;
+                durationCache.put(path, cachedDur);
+            }
+        }
+        if (cachedDur != null && cachedDur > 0) {
+            txtDuration.setText(formatDuration(cachedDur));
+            txtDuration.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        txtDuration.setVisibility(View.GONE);
+        durationExecutor.execute(() -> {
+            long durMs = 0L;
+            Long existing = durationCache.get(path);
+            if (existing != null && existing > 0) {
+                durMs = existing;
+            } else {
+                MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+                try {
+                    mmr.setDataSource(path);
+                    String dur = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                    if (dur != null) {
+                        durMs = Long.parseLong(dur.trim());
+                    }
+                } catch (Exception ignored) {
+                } finally {
+                    try {
+                        mmr.release();
+                    } catch (Exception ignored) {}
+                }
+                if (durMs > 0) {
+                    durationCache.put(path, durMs);
+                }
+            }
+            final long finalDurMs = durMs;
+            if (finalDurMs > 0) {
+                mainHandler.post(() -> {
+                    if (path.equals(txtDuration.getTag())) {
+                        txtDuration.setText(formatDuration(finalDurMs));
+                        txtDuration.setVisibility(View.VISIBLE);
+                    }
+                });
+            }
+        });
+    }
 
     public static TrackInfo getCached(String path) {
         return path != null ? cache.get(path) : null;
@@ -218,8 +299,7 @@ public final class TrackMetadataHelper {
     public static void showTrackDetailsDialog(Context context, TrackInfo info) {
         if (context == null || info == null) return;
         String channelLabel = (info.channels == 1) ? "Mono (1 ch)" : "Stereo (" + info.channels + " ch)";
-        int totalSec = (int) (Math.max(0, info.durationMs) / 1000);
-        String durationStr = String.format(Locale.US, "%02d:%02d", totalSec / 60, totalSec % 60);
+        String durationStr = formatDuration(info.durationMs);
 
         String details = "Title: " + info.title
                 + "\nArtist: " + info.artist

@@ -466,6 +466,11 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
                             }
                         } catch (Exception ignored) {}
 
+                        try {
+                            long durationMs = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION));
+                            TrackMetadataHelper.cacheDuration(path, durationMs);
+                        } catch (Exception ignored) {}
+
                         allSongList.add(path);
                         artistList.add(artist);
                     }
