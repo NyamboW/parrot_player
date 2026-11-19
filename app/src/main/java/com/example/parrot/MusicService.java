@@ -115,6 +115,14 @@ public class MusicService extends Service {
     private MediaPlayer fadingOutPlayer;
     private boolean crossfadeTriggered = false;
     private boolean incomingFadeIn = false;
+    private MediaPlayer gaplessNextPlayer;
+    private int gaplessNextToken = 0;
+    private boolean isGaplessNextPrepared = false;
+    private String gaplessNextPath = null;
+    private boolean gaplessNextFromQueue = false;
+    private boolean gaplessNextRepeatOne = false;
+    private int gaplessTargetPosition = -1;
+    private int gaplessTargetShuffleCursor = -1;
     private BroadcastReceiver audioDeviceReceiver;
     private AudioDeviceCallback audioDeviceCallback;
     private boolean audioDeviceCallbackReady = false;
@@ -434,32 +442,9 @@ public class MusicService extends Service {
                 showNotification(preparedMp.isPlaying() ? R.drawable.ic_pause : R.drawable.ic_play);
                 broadcastUIUpdate();
                 saveCurrentState(false);
+                prepareNextGaplessPlayer();
             });
-            mp.setOnCompletionListener(completedMp -> {
-                if (token != playToken || completedMp != mediaPlayer) return;
-                stopPeriodicStateSave();
-                if (repeatMode == REPEAT_ONE) {
-                    playSong(position);
-                } else if (!queueManager.isEmpty()) {
-                    playNextFromQueue();
-                } else if (repeatMode == REPEAT_OFF && isAtEndOfPlaylistCycle()) {
-                    try {
-                        completedMp.seekTo(0);
-                    } catch (Exception ignored) {}
-                    updateMediaSession();
-                    showNotification(R.drawable.ic_play);
-                    broadcastUIUpdate();
-                    saveCurrentState(false);
-                } else {
-                    nextSong();
-                }
-            });
-            mp.setOnErrorListener((errorMp, what, extra) -> {
-                if (token != playToken || errorMp != mediaPlayer) return true;
-                isPrepared = false;
-                stopPeriodicStateSave();
-                return true;
-            });
+            attachPlaybackListeners(mp, token);
 
             // Satisfy foreground service & update UI immediately without waiting for preparation
             updateMediaSession();
@@ -472,6 +457,281 @@ public class MusicService extends Service {
         } catch (Exception e) {
             e.printStackTrace();
             safeRelease();
+        }
+    }
+
+    private void attachPlaybackListeners(MediaPlayer mp, int token) {
+        mp.setOnCompletionListener(completedMp -> {
+            if (token != playToken || completedMp != mediaPlayer) return;
+            stopPeriodicStateSave();
+            if (gaplessNextPlayer != null && isGaplessNextPrepared && gaplessNextPath != null
+                    && crossfadeSeconds == 0 && !skipSilence
+                    && !(abLoopStartMs >= 0 && abLoopEndMs > abLoopStartMs)) {
+                promoteGaplessNextPlayer();
+                return;
+            }
+            if (repeatMode == REPEAT_ONE) {
+                playSong(position);
+            } else if (!queueManager.isEmpty()) {
+                playNextFromQueue();
+            } else if (repeatMode == REPEAT_OFF && isAtEndOfPlaylistCycle()) {
+                try {
+                    completedMp.seekTo(0);
+                } catch (Exception ignored) {}
+                updateMediaSession();
+                showNotification(R.drawable.ic_play);
+                broadcastUIUpdate();
+                saveCurrentState(false);
+            } else {
+                nextSong();
+            }
+        });
+        mp.setOnErrorListener((errorMp, what, extra) -> {
+            if (token != playToken || errorMp != mediaPlayer) return true;
+            isPrepared = false;
+            stopPeriodicStateSave();
+            releaseGaplessNextPlayer();
+            return true;
+        });
+    }
+
+    /**
+     * Pre-prepares the upcoming track on a standby MediaPlayer and links it via
+     * {@link MediaPlayer#setNextMediaPlayer(MediaPlayer)} for zero-gap transitions.
+     */
+    private void prepareNextGaplessPlayer() {
+        if (mediaPlayer == null || !isPrepared || mySongs == null || mySongs.isEmpty()) {
+            releaseGaplessNextPlayer();
+            return;
+        }
+        if (crossfadeSeconds > 0 || skipSilence || (abLoopStartMs >= 0 && abLoopEndMs > abLoopStartMs)) {
+            releaseGaplessNextPlayer();
+            return;
+        }
+
+        String nextPath = null;
+        boolean fromQueue = false;
+        boolean repeatOne = false;
+        int targetPos = -1;
+        int targetCursor = -1;
+
+        if (repeatMode == REPEAT_ONE) {
+            if (position >= 0 && position < mySongs.size()) {
+                nextPath = mySongs.get(position);
+                repeatOne = true;
+                targetPos = position;
+                targetCursor = shuffleCursor;
+            }
+        } else if (!queueManager.isEmpty()) {
+            ArrayList<String> queue = queueManager.getQueue();
+            if (!queue.isEmpty()) {
+                nextPath = queue.get(0);
+                fromQueue = true;
+                targetPos = Math.min(position + 1, mySongs.size());
+            }
+        } else if (repeatMode == REPEAT_OFF && isAtEndOfPlaylistCycle()) {
+            releaseGaplessNextPlayer();
+            return;
+        } else if (isShuffle) {
+            ensureShuffleDeckValid();
+            if (shuffleOrder.size() <= 1) {
+                targetPos = 0;
+                targetCursor = 0;
+                nextPath = mySongs.get(0);
+            } else if (shuffleCursor + 1 < shuffleOrder.size()) {
+                targetCursor = shuffleCursor + 1;
+                targetPos = shuffleOrder.get(targetCursor);
+                nextPath = mySongs.get(targetPos);
+            } else {
+                // End of current shuffle cycle: let nextSong() build a fresh cycle without duplicate titles.
+                releaseGaplessNextPlayer();
+                return;
+            }
+        } else {
+            targetPos = (position + 1) % mySongs.size();
+            nextPath = mySongs.get(targetPos);
+        }
+
+        if (nextPath == null || nextPath.isEmpty()) {
+            releaseGaplessNextPlayer();
+            return;
+        }
+
+        if (gaplessNextPlayer != null && isGaplessNextPrepared
+                && nextPath.equals(gaplessNextPath)
+                && gaplessNextFromQueue == fromQueue
+                && gaplessNextRepeatOne == repeatOne
+                && gaplessTargetPosition == targetPos
+                && gaplessTargetShuffleCursor == targetCursor) {
+            return;
+        }
+
+        releaseGaplessNextPlayer();
+        final int nextToken = ++gaplessNextToken;
+        gaplessNextPath = nextPath;
+        gaplessNextFromQueue = fromQueue;
+        gaplessNextRepeatOne = repeatOne;
+        gaplessTargetPosition = targetPos;
+        gaplessTargetShuffleCursor = targetCursor;
+
+        MediaPlayer nextMp = new MediaPlayer();
+        gaplessNextPlayer = nextMp;
+        try {
+            nextMp.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build());
+            nextMp.setDataSource(this, Uri.parse(nextPath));
+            nextMp.setOnPreparedListener(preparedNext -> {
+                if (nextToken != gaplessNextToken || preparedNext != gaplessNextPlayer
+                        || mediaPlayer == null || !isPrepared) {
+                    try {
+                        preparedNext.setOnPreparedListener(null);
+                        preparedNext.setOnErrorListener(null);
+                        preparedNext.release();
+                    } catch (Exception ignored) {}
+                    return;
+                }
+                try {
+                    preparedNext.setVolume(1.0f, 1.0f);
+                    mediaPlayer.setNextMediaPlayer(preparedNext);
+                    isGaplessNextPrepared = true;
+                } catch (Exception e) {
+                    releaseGaplessNextPlayer();
+                }
+            });
+            nextMp.setOnErrorListener((errorMp, what, extra) -> {
+                if (nextToken == gaplessNextToken) {
+                    releaseGaplessNextPlayer();
+                }
+                return true;
+            });
+            nextMp.prepareAsync();
+        } catch (Exception e) {
+            releaseGaplessNextPlayer();
+        }
+    }
+
+    /**
+     * Promotes the already-started gapless next MediaPlayer when the outgoing track completes.
+     */
+    private void promoteGaplessNextPlayer() {
+        MediaPlayer oldMp = mediaPlayer;
+        MediaPlayer promotedMp = gaplessNextPlayer;
+        String nextPath = gaplessNextPath;
+        boolean wasFromQueue = gaplessNextFromQueue;
+        boolean wasRepeatOne = gaplessNextRepeatOne;
+        int targetPos = gaplessTargetPosition;
+        int targetCursor = gaplessTargetShuffleCursor;
+
+        gaplessNextToken++;
+        gaplessNextPlayer = null;
+        isGaplessNextPrepared = false;
+        gaplessNextPath = null;
+        gaplessNextFromQueue = false;
+        gaplessNextRepeatOne = false;
+        gaplessTargetPosition = -1;
+        gaplessTargetShuffleCursor = -1;
+
+        if (oldMp != null) {
+            try {
+                oldMp.setOnPreparedListener(null);
+                oldMp.setOnCompletionListener(null);
+                oldMp.setOnErrorListener(null);
+                oldMp.release();
+            } catch (Exception ignored) {}
+        }
+
+        final int newToken = ++playToken;
+        mediaPlayer = promotedMp;
+        isPrepared = true;
+        crossfadeTriggered = false;
+        incomingFadeIn = false;
+        restoredSeekPosition = 0;
+
+        if (!wasRepeatOne) {
+            abLoopStartMs = -1;
+            abLoopEndMs = -1;
+            if (wasFromQueue) {
+                String dequeued = queueManager.pollNext();
+                if (dequeued == null) {
+                    dequeued = nextPath;
+                }
+                int insertIndex = position + 1;
+                if (insertIndex > mySongs.size()) insertIndex = mySongs.size();
+                mySongs.add(insertIndex, dequeued);
+                position = insertIndex;
+                if (isShuffle) {
+                    ensureShuffleDeckSyncedToPosition(position);
+                }
+                stateManager.savePlaylist(mySongs);
+                sessionTrackOrder++;
+            } else {
+                if (targetPos >= 0 && targetPos < mySongs.size()) {
+                    position = targetPos;
+                }
+                if (isShuffle && targetCursor >= 0) {
+                    shuffleCursor = targetCursor;
+                }
+                sessionTrackOrder = (mySongs.size() <= 1 || sessionTrackOrder >= mySongs.size()) ? 1 : (sessionTrackOrder + 1);
+            }
+        }
+
+        try {
+            if (!promotedMp.isPlaying()) {
+                int result = AudioManagerCompat.requestAudioFocus(audioManager, audioFocusRequest);
+                if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                    promotedMp.start();
+                }
+            }
+        } catch (Exception ignored) {}
+
+        ListeningStatsManager.recordSongPlayed(this, nextPath);
+        setupEqualizer();
+        int dur = 0;
+        try {
+            dur = promotedMp.getDuration();
+        } catch (Exception ignored) {}
+        restoredDuration = Math.max(0, dur);
+        if (playbackSpeed != 1.0f) {
+            applyPlaybackSpeed();
+        }
+        attachPlaybackListeners(promotedMp, newToken);
+        startPeriodicStateSave();
+        ensureAlbumArtLoaded(nextPath);
+        updateMediaSession();
+        showNotification(promotedMp.isPlaying() ? R.drawable.ic_pause : R.drawable.ic_play);
+        broadcastUIUpdate();
+        preloadNextSongArt();
+        saveCurrentState(false);
+        if (wasFromQueue) {
+            broadcastQueueUpdate();
+        } else {
+            prepareNextGaplessPlayer();
+        }
+    }
+
+    private void releaseGaplessNextPlayer() {
+        gaplessNextToken++;
+        boolean wasPrepared = isGaplessNextPrepared;
+        isGaplessNextPrepared = false;
+        gaplessNextPath = null;
+        gaplessNextFromQueue = false;
+        gaplessNextRepeatOne = false;
+        gaplessTargetPosition = -1;
+        gaplessTargetShuffleCursor = -1;
+        if (mediaPlayer != null && isPrepared && wasPrepared) {
+            try {
+                mediaPlayer.setNextMediaPlayer(null);
+            } catch (Exception ignored) {}
+        }
+        if (gaplessNextPlayer != null) {
+            try {
+                gaplessNextPlayer.setOnPreparedListener(null);
+                gaplessNextPlayer.setOnErrorListener(null);
+                gaplessNextPlayer.release();
+            } catch (Exception ignored) {}
+            gaplessNextPlayer = null;
         }
     }
 
@@ -680,6 +940,7 @@ public class MusicService extends Service {
     }
 
     private void safeRelease() {
+        releaseGaplessNextPlayer();
         playToken++;
         boolean wasPrepared = isPrepared;
         isPrepared = false;
@@ -786,6 +1047,7 @@ public class MusicService extends Service {
         if (stateManager != null) {
             stateManager.saveQueue(queueManager.getQueue());
         }
+        prepareNextGaplessPlayer();
         Intent intent = new Intent(BROADCAST_QUEUE_UPDATED);
         intent.setPackage(getPackageName());
         sendBroadcast(intent);
@@ -1043,6 +1305,7 @@ public class MusicService extends Service {
             shuffleCursor = -1;
         }
         preloadNextSongArt();
+        prepareNextGaplessPlayer();
         if (stateManager != null) {
             stateManager.saveModes(isShuffle, repeatMode);
         }
@@ -1057,6 +1320,7 @@ public class MusicService extends Service {
             mode = REPEAT_OFF;
         }
         repeatMode = mode;
+        prepareNextGaplessPlayer();
         if (stateManager != null) {
             stateManager.saveModes(isShuffle, repeatMode);
         }
@@ -1082,12 +1346,14 @@ public class MusicService extends Service {
     public void setAbLoopEnd(int endMs) {
         if (abLoopStartMs >= 0 && endMs > abLoopStartMs + 500) {
             abLoopEndMs = endMs;
+            prepareNextGaplessPlayer();
         }
     }
 
     public void clearAbLoop() {
         abLoopStartMs = -1;
         abLoopEndMs = -1;
+        prepareNextGaplessPlayer();
     }
 
     public int getAbLoopStartMs() {
@@ -1205,6 +1471,8 @@ public class MusicService extends Service {
                     activeIsPlaying = false;
                     broadcastUIUpdate();
                 }
+            } else {
+                prepareNextGaplessPlayer();
             }
         }
     }
@@ -1286,10 +1554,12 @@ public class MusicService extends Service {
 
     public void setCrossfadeSeconds(int seconds) {
         crossfadeSeconds = Math.max(0, Math.min(12, seconds));
+        prepareNextGaplessPlayer();
     }
 
     public void setSkipSilence(boolean enabled) {
         skipSilence = enabled;
+        prepareNextGaplessPlayer();
     }
 
     public void setSleepTimerMinutes(int minutes) {
@@ -1338,6 +1608,7 @@ public class MusicService extends Service {
     }
 
     private void triggerCrossfadeToNext() {
+        releaseGaplessNextPlayer();
         releaseFadingOutPlayer();
         if (mediaPlayer != null && isPrepared) {
             final MediaPlayer outgoing = mediaPlayer;
