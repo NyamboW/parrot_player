@@ -666,6 +666,7 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
     @Override
     protected void onResume() {
         super.onResume();
+        setBarsVisible(true);
         applyAccentTheme();
         refreshDrawerPlaylists();
         refreshDrawerCounts();

@@ -21,7 +21,9 @@ import android.speech.RecognizerIntent;
 import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.VelocityTracker;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.OvershootInterpolator;
@@ -58,6 +60,13 @@ public class PlayerActivity extends AppCompatActivity {
     SeekBar seekBar;
     ImageView imgView;
     CardView imgViewCard;
+    private View playerRootLayout;
+    private boolean isMinimizing = false;
+    private boolean isDraggingDown = false;
+    private float dragStartRawX = 0f;
+    private float dragStartRawY = 0f;
+    private boolean dragIgnored = false;
+    private VelocityTracker velocityTracker;
 
     ImageButton btnPlay, btnNext, btnPrev, btnRepeat, btnShuffle, btnFav, btnEq, btnBack, btnQueue, btnMic, btnLyrics;
 
@@ -173,10 +182,12 @@ public class PlayerActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        overridePendingTransition(R.anim.slide_in_up, R.anim.stay_still);
         setContentView(R.layout.activity_player);
 
         favManager = new FavouritesManager(this);
 
+        playerRootLayout = findViewById(R.id.playerRootLayout);
         txtSong = findViewById(R.id.txtSong);
         txtArtistAlbum = findViewById(R.id.txtArtistAlbum);
         txtAudioQualityPill = findViewById(R.id.txtAudioQualityPill);
@@ -516,6 +527,11 @@ public class PlayerActivity extends AppCompatActivity {
                     } else {
                         animateSwipeAndSkip(false);
                     }
+                    return true;
+                } else if (diffY > Math.abs(diffX)
+                        && diffY > SWIPE_THRESHOLD
+                        && velocityY > SWIPE_VELOCITY_THRESHOLD) {
+                    animateMinimizeToMiniPlayer();
                     return true;
                 }
                 return false;
@@ -1091,11 +1107,154 @@ public class PlayerActivity extends AppCompatActivity {
         unregisterReceiver(updateReceiver);
     }
 
-    private void navigateBackFromPlayer() {
-        if (isTaskRoot()) {
-            startActivity(new Intent(this, MainActivity.class));
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (isMinimizing) {
+            return true;
         }
-        finish();
+        int action = ev.getActionMasked();
+        float rawX = ev.getRawX();
+        float rawY = ev.getRawY();
+
+        if (action == MotionEvent.ACTION_DOWN) {
+            dragStartRawX = rawX;
+            dragStartRawY = rawY;
+            isDraggingDown = false;
+            dragIgnored = isTouchInsideExcludedScrollView(rawX, rawY);
+            if (velocityTracker == null) {
+                velocityTracker = VelocityTracker.obtain();
+            } else {
+                velocityTracker.clear();
+            }
+            velocityTracker.addMovement(ev);
+        } else if (action == MotionEvent.ACTION_MOVE) {
+            if (velocityTracker != null) {
+                velocityTracker.addMovement(ev);
+            }
+            if (!dragIgnored && !isUserSeeking) {
+                float dx = rawX - dragStartRawX;
+                float dy = rawY - dragStartRawY;
+                int touchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
+
+                if (!isDraggingDown) {
+                    if (Math.abs(dx) > touchSlop && Math.abs(dx) >= Math.abs(dy)) {
+                        // Horizontal swipe (e.g. album art skip or seekbar) — don't intercept
+                        dragIgnored = true;
+                    } else if (dy > touchSlop * 1.25f && dy > Math.abs(dx) * 1.25f) {
+                        isDraggingDown = true;
+                        // Cancel any pending button press state in child views
+                        MotionEvent cancelEvent = MotionEvent.obtain(ev);
+                        cancelEvent.setAction(MotionEvent.ACTION_CANCEL);
+                        super.dispatchTouchEvent(cancelEvent);
+                        cancelEvent.recycle();
+                    }
+                }
+
+                if (isDraggingDown && playerRootLayout != null) {
+                    float dragOffset = Math.max(0f, dy);
+                    int screenH = Math.max(1, getResources().getDisplayMetrics().heightPixels);
+                    float progress = Math.min(1f, dragOffset / (screenH * 0.55f));
+                    playerRootLayout.setTranslationY(dragOffset);
+                    float scale = 1f - (0.06f * progress);
+                    playerRootLayout.setScaleX(scale);
+                    playerRootLayout.setScaleY(scale);
+                    playerRootLayout.setAlpha(1f - (0.35f * progress));
+                    return true;
+                }
+            }
+        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            float vy = 0f;
+            if (velocityTracker != null) {
+                velocityTracker.addMovement(ev);
+                velocityTracker.computeCurrentVelocity(1000);
+                vy = velocityTracker.getYVelocity();
+                velocityTracker.recycle();
+                velocityTracker = null;
+            }
+            if (isDraggingDown && playerRootLayout != null) {
+                isDraggingDown = false;
+                float dy = Math.max(0f, rawY - dragStartRawY);
+                float density = getResources().getDisplayMetrics().density;
+                boolean shouldDismiss = (action == MotionEvent.ACTION_UP)
+                        && (dy > 95f * density || (vy > 600f && dy > 32f * density));
+                if (shouldDismiss) {
+                    animateMinimizeToMiniPlayer();
+                } else {
+                    playerRootLayout.animate()
+                            .translationY(0f)
+                            .scaleX(1f)
+                            .scaleY(1f)
+                            .alpha(1f)
+                            .setDuration(190)
+                            .setInterpolator(new DecelerateInterpolator())
+                            .start();
+                }
+                return true;
+            }
+            isDraggingDown = false;
+            dragIgnored = false;
+        }
+
+        return super.dispatchTouchEvent(ev);
+    }
+
+    private boolean isTouchInsideExcludedScrollView(float rawX, float rawY) {
+        if (seekBar != null && isPointInsideView(seekBar, rawX, rawY, 16)) {
+            return true;
+        }
+        if (isLyricsOverlayVisible && lyricsScrollView != null
+                && isPointInsideView(lyricsScrollView, rawX, rawY, 0)
+                && lyricsScrollView.canScrollVertically(-1)) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isPointInsideView(View view, float rawX, float rawY, int slopPx) {
+        int[] loc = new int[2];
+        view.getLocationOnScreen(loc);
+        return rawX >= loc[0] - slopPx
+                && rawX <= loc[0] + view.getWidth() + slopPx
+                && rawY >= loc[1] - slopPx
+                && rawY <= loc[1] + view.getHeight() + slopPx;
+    }
+
+    private void animateMinimizeToMiniPlayer() {
+        if (isMinimizing) return;
+        isMinimizing = true;
+
+        if (isTaskRoot()) {
+            Intent mainIntent = new Intent(this, MainActivity.class);
+            mainIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(mainIntent);
+        }
+
+        if (playerRootLayout != null) {
+            int screenH = getResources().getDisplayMetrics().heightPixels;
+            float remainingRatio = Math.max(0.35f, 1f - (playerRootLayout.getTranslationY() / Math.max(1f, screenH)));
+            long duration = (long) (220 * remainingRatio);
+
+            playerRootLayout.animate().cancel();
+            playerRootLayout.animate()
+                    .translationY(screenH)
+                    .scaleX(0.92f)
+                    .scaleY(0.92f)
+                    .alpha(0f)
+                    .setDuration(duration)
+                    .setInterpolator(new DecelerateInterpolator())
+                    .withEndAction(() -> {
+                        finish();
+                        overridePendingTransition(0, 0);
+                    })
+                    .start();
+        } else {
+            finish();
+            overridePendingTransition(R.anim.stay_still, R.anim.slide_out_down);
+        }
+    }
+
+    private void navigateBackFromPlayer() {
+        animateMinimizeToMiniPlayer();
     }
 
     @Override
