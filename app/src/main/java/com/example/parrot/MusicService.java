@@ -380,6 +380,7 @@ public class MusicService extends Service {
             abLoopStartMs = -1;
             abLoopEndMs = -1;
         }
+        ListeningStatsManager.recordSongPlayed(this, songPath);
         final boolean shouldFadeIn = incomingFadeIn && crossfadeSeconds > 0;
         incomingFadeIn = false;
         restoredSeekPosition = Math.max(0, initialSeekMs);

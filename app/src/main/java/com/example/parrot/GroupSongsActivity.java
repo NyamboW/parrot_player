@@ -376,6 +376,24 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
                     artistList.add((artist != null && !artist.isEmpty()) ? artist : "Unknown Artist");
                 }
             }
+        } else if ("smart_playlist".equals(type)) {
+            String smartId = getIntent().getStringExtra("smart_id");
+            Map<String, String> mediaStoreArtists = queryArtistLookupMap();
+            ArrayList<String> smartSongs = ListeningStatsManager.getSmartPlaylistSongs(this, smartId);
+            boolean isMostPlayed = ListeningStatsManager.SMART_MOST_PLAYED.equals(smartId);
+            for (String path : smartSongs) {
+                File file = new File(path);
+                if (file.exists()) {
+                    songList.add(path);
+                    String artist = mediaStoreArtists.get(path);
+                    String cleanArtist = (artist != null && !artist.isEmpty()) ? artist : "Unknown Artist";
+                    if (isMostPlayed) {
+                        int plays = ListeningStatsManager.getPlayCount(this, path);
+                        cleanArtist += "  •  " + plays + (plays == 1 ? " play" : " plays");
+                    }
+                    artistList.add(cleanArtist);
+                }
+            }
         } else if (PermissionHelper.hasAudioPermission(this)) {
             Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
             String selection = MediaStore.Audio.Media.IS_MUSIC + "!=0";
