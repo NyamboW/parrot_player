@@ -459,7 +459,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="Start playing automatically when wired headphones are plugged in"
+                    android:text="Start playing automatically when headphones, Bluetooth, or car audio connect"
                     android:textColor="#9AA3B2"
                     android:textSize="12sp" />
             </LinearLayout>

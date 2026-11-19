@@ -8,6 +8,8 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.media.AudioAttributes;
+import android.media.AudioDeviceCallback;
+import android.media.AudioDeviceInfo;
 import android.media.MediaPlayer;
 import android.media.PlaybackParams;
 import android.net.Uri;
@@ -114,6 +116,9 @@ public class MusicService extends Service {
     private boolean crossfadeTriggered = false;
     private boolean incomingFadeIn = false;
     private BroadcastReceiver audioDeviceReceiver;
+    private AudioDeviceCallback audioDeviceCallback;
+    private boolean audioDeviceCallbackReady = false;
+    private long lastAutoResumeElapsedMs = 0L;
 
     private static final long STATE_SAVE_INTERVAL_MS = 3000L;
     private static final long TRANSITION_POLL_INTERVAL_MS = 250L;
@@ -180,9 +185,8 @@ public class MusicService extends Service {
         stateManager = new PlayerStateManager(this);
         loadPlaybackPreferences();
         restoreSavedState();
-        registerAudioDeviceReceiver();
-        
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        registerAudioDeviceReceiver();
         audioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
             @Override
             public void onAudioFocusChange(int focusChange) {
@@ -705,6 +709,10 @@ public class MusicService extends Service {
         
         String songPath = mySongs.get(position);
         String songName = getFileName(songPath);
+        TrackMetadataHelper.TrackInfo cachedInfo = TrackMetadataHelper.getCached(songPath);
+        String contentText = (cachedInfo != null && cachedInfo.hasKnownArtist())
+                ? cachedInfo.getArtistAlbumSubtitle()
+                : "Parrot Audio Player";
 
         Intent prevIntent = new Intent(this, MusicService.class).setAction(ACTION_PREV);
         PendingIntent prevPendingIntent = PendingIntent.getService(this, 0, prevIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -727,7 +735,7 @@ public class MusicService extends Service {
                 .setSmallIcon(R.drawable.ic_music)
                 .setLargeIcon(icon)
                 .setContentTitle(songName)
-                .setContentText("Parrot Player")
+                .setContentText(contentText)
                 .addAction(R.drawable.ic_previous, "Previous", prevPendingIntent)
                 .addAction(playPauseBtn, "Play", playPendingIntent)
                 .addAction(R.drawable.ic_next, "Next", nextPendingIntent)
@@ -814,16 +822,33 @@ public class MusicService extends Service {
             stateBuilder.addCustomAction(leftSpacerAction);
         }
         stateBuilder.addCustomAction(closeAction)
-                .setState(state, currentPosition, 1.0f);
+                .setState(state, currentPosition, playbackSpeed);
         mediaSession.setPlaybackState(stateBuilder.build());
-                
-        String songPath = mySongs.get(this.position);
+
+        final String songPath = mySongs.get(this.position);
         String songName = getFileName(songPath);
         Bitmap icon = AlbumArtLoader.getInstance().getBestCachedArt(songPath);
-        
+        TrackMetadataHelper.TrackInfo cachedInfo = TrackMetadataHelper.getCached(songPath);
+
         MediaMetadataCompat.Builder metadataBuilder = new MediaMetadataCompat.Builder()
-                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, songName)
+                .putString(MediaMetadataCompat.METADATA_KEY_TITLE,
+                        (cachedInfo != null && !cachedInfo.title.isEmpty()) ? cachedInfo.title : songName)
                 .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, getDuration());
+        if (cachedInfo != null) {
+            if (cachedInfo.hasKnownArtist()) {
+                metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, cachedInfo.artist);
+            }
+            if (cachedInfo.hasKnownAlbum()) {
+                metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ALBUM, cachedInfo.album);
+            }
+        } else {
+            TrackMetadataHelper.loadTrackInfoAsync(songPath, info -> {
+                if (mediaPlayer != null && songPath.equals(getCurrentSongPath())) {
+                    updateMediaSession();
+                    showNotification((!isPrepared || isPlaying()) ? R.drawable.ic_pause : R.drawable.ic_play);
+                }
+            });
+        }
         if (icon != null) {
             metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, icon);
         }
@@ -1391,9 +1416,8 @@ public class MusicService extends Service {
                 } else if (Intent.ACTION_HEADSET_PLUG.equals(intent.getAction())) {
                     if (isInitialStickyBroadcast()) return;
                     int state = intent.getIntExtra("state", -1);
-                    boolean resumeOnConnect = prefs.getBoolean(SettingsFragment.KEY_RESUME_ON_HEADSET, false);
-                    if (state == 1 && resumeOnConnect && mediaPlayer != null && isPrepared && !isPlaying()) {
-                        togglePlay();
+                    if (state == 1) {
+                        maybeAutoResumeOnAudioConnect();
                     }
                 }
             }
@@ -1406,6 +1430,57 @@ public class MusicService extends Service {
         } else {
             registerReceiver(audioDeviceReceiver, filter);
         }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && audioManager != null) {
+            audioDeviceCallbackReady = false;
+            audioDeviceCallback = new AudioDeviceCallback() {
+                @Override
+                public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
+                    if (!audioDeviceCallbackReady || addedDevices == null) return;
+                    for (AudioDeviceInfo device : addedDevices) {
+                        if (isExternalOutputDevice(device)) {
+                            maybeAutoResumeOnAudioConnect();
+                            break;
+                        }
+                    }
+                }
+            };
+            audioManager.registerAudioDeviceCallback(audioDeviceCallback, stateHandler);
+            stateHandler.postDelayed(() -> audioDeviceCallbackReady = true, 650L);
+        }
+    }
+
+    private void maybeAutoResumeOnAudioConnect() {
+        SharedPreferences prefs = getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE);
+        boolean resumeOnConnect = prefs.getBoolean(SettingsFragment.KEY_RESUME_ON_HEADSET, false);
+        if (!resumeOnConnect || mySongs == null || mySongs.isEmpty() || isPlaying()) {
+            return;
+        }
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastAutoResumeElapsedMs < 1500L) {
+            return;
+        }
+        lastAutoResumeElapsedMs = now;
+        togglePlay();
+    }
+
+    private boolean isExternalOutputDevice(AudioDeviceInfo device) {
+        if (device == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.M || !device.isSink()) {
+            return false;
+        }
+        int type = device.getType();
+        if (type == AudioDeviceInfo.TYPE_WIRED_HEADSET
+                || type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES
+                || type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+                || type == AudioDeviceInfo.TYPE_USB_HEADSET
+                || type == AudioDeviceInfo.TYPE_USB_DEVICE
+                || type == AudioDeviceInfo.TYPE_USB_ACCESSORY) {
+            return true;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            return type == AudioDeviceInfo.TYPE_BLE_HEADSET || type == AudioDeviceInfo.TYPE_BLE_SPEAKER;
+        }
+        return false;
     }
 
     private void closePlayerService() {
@@ -1439,6 +1514,11 @@ public class MusicService extends Service {
         if (audioDeviceReceiver != null) {
             try {
                 unregisterReceiver(audioDeviceReceiver);
+            } catch (Exception ignored) {}
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && audioManager != null && audioDeviceCallback != null) {
+            try {
+                audioManager.unregisterAudioDeviceCallback(audioDeviceCallback);
             } catch (Exception ignored) {}
         }
         saveCurrentState(true);
