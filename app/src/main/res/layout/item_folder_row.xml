@@ -12,19 +12,19 @@
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="14dp"
-        android:paddingTop="10dp"
+        android:paddingTop="8dp"
         android:paddingEnd="14dp"
-        android:paddingBottom="10dp">
+        android:paddingBottom="8dp">
 
         <FrameLayout
-            android:layout_width="46dp"
-            android:layout_height="46dp"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
             android:background="@drawable/card_surface_bg">
 
             <ImageView
                 android:id="@+id/imgFolderIcon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="21dp"
+                android:layout_height="21dp"
                 android:layout_gravity="center"
                 android:src="@drawable/ic_folder_music"
                 app:tint="#4CAF50" />
@@ -33,7 +33,7 @@
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="14dp"
+            android:layout_marginStart="12dp"
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:orientation="vertical">
@@ -47,23 +47,23 @@
                 android:singleLine="true"
                 android:text="Music"
                 android:textColor="#F5F7FA"
-                android:textSize="15sp" />
+                android:textSize="13.5sp" />
 
             <TextView
                 android:id="@+id/txtFolderPath"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="1.5dp"
                 android:ellipsize="middle"
                 android:singleLine="true"
                 android:text="0 tracks • /Internal/Music"
-                android:textColor="#9AA3B2"
-                android:textSize="12sp" />
+                android:textColor="#8F98A8"
+                android:textSize="11.5sp" />
         </LinearLayout>
 
         <ImageView
-            android:layout_width="20dp"
-            android:layout_height="20dp"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
             android:src="@drawable/ic_chevron_right"
             app:tint="#5E6775" />
     </LinearLayout>
@@ -71,7 +71,7 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="0.5dp"
-        android:layout_marginStart="74dp"
+        android:layout_marginStart="68dp"
         android:layout_marginEnd="14dp"
         android:background="#181D26" />
 

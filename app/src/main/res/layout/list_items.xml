@@ -11,19 +11,19 @@
         android:layout_height="wrap_content"
         android:background="?attr/selectableItemBackground"
         android:paddingStart="14dp"
-        android:paddingTop="9dp"
+        android:paddingTop="7dp"
         android:paddingEnd="8dp"
-        android:paddingBottom="9dp">
+        android:paddingBottom="7dp">
 
         <androidx.cardview.widget.CardView
             android:id="@+id/songImgCard"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
             android:layout_alignParentStart="true"
             android:layout_centerVertical="true"
-            android:layout_marginEnd="14dp"
+            android:layout_marginEnd="12dp"
             app:cardBackgroundColor="#181C24"
-            app:cardCornerRadius="10dp"
+            app:cardCornerRadius="8dp"
             app:cardElevation="0dp">
 
             <ImageView
@@ -76,9 +76,9 @@
 
                 <com.example.parrot.NowPlayingBarsView
                     android:id="@+id/nowPlayingBars"
-                    android:layout_width="14dp"
-                    android:layout_height="14dp"
-                    android:layout_marginEnd="7dp"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:layout_marginEnd="6dp"
                     android:visibility="gone" />
 
                 <TextView
@@ -93,19 +93,19 @@
                     android:singleLine="true"
                     android:text="Song Name"
                     android:textColor="#F5F7FA"
-                    android:textSize="15sp" />
+                    android:textSize="13.5sp" />
             </LinearLayout>
 
             <TextView
                 android:id="@+id/txtartist"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="1.5dp"
                 android:ellipsize="end"
                 android:singleLine="true"
                 android:text="Artist"
-                android:textColor="#9AA3B2"
-                android:textSize="12sp" />
+                android:textColor="#8F98A8"
+                android:textSize="11.5sp" />
         </LinearLayout>
 
     </RelativeLayout>
@@ -113,7 +113,7 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="0.5dp"
-        android:layout_marginStart="76dp"
+        android:layout_marginStart="68dp"
         android:layout_marginEnd="14dp"
         android:background="#181D26" />
 

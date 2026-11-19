@@ -15,21 +15,21 @@
         android:background="@drawable/card_surface_bg"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="10dp">
+        android:padding="9dp">
 
         <androidx.cardview.widget.CardView
             android:id="@+id/playlistCoverCard"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
             app:cardBackgroundColor="#1E2430"
-            app:cardCornerRadius="10dp"
+            app:cardCornerRadius="8dp"
             app:cardElevation="0dp">
 
             <ImageView
                 android:id="@+id/imgPlaylistCover"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:padding="12dp"
+                android:padding="10dp"
                 android:scaleType="centerCrop"
                 android:src="@drawable/ic_nav_playlist_item"
                 app:tint="#9AA3B2" />
@@ -38,7 +38,7 @@
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="14dp"
+            android:layout_marginStart="12dp"
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:orientation="vertical">
@@ -52,23 +52,23 @@
                 android:singleLine="true"
                 android:text="Playlist Name"
                 android:textColor="#F5F7FA"
-                android:textSize="15sp" />
+                android:textSize="13.5sp" />
 
             <TextView
                 android:id="@+id/txtPlaylistCount"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="1.5dp"
                 android:singleLine="true"
                 android:text="0 tracks"
-                android:textColor="#9AA3B2"
-                android:textSize="12sp" />
+                android:textColor="#8F98A8"
+                android:textSize="11.5sp" />
         </LinearLayout>
 
         <ImageView
             android:id="@+id/imgPlaylistArrow"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
             android:src="@drawable/ic_chevron_right"
             app:tint="#5E6775" />
     </LinearLayout>
