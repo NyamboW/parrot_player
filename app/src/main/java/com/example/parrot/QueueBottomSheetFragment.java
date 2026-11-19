@@ -1,17 +1,23 @@
 package com.example.parrot;
 
+import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -26,6 +32,7 @@ public class QueueBottomSheetFragment extends BottomSheetDialogFragment {
     private TextView txtQueueEmpty;
     private TextView txtQueueCount;
     private TextView btnClearQueue;
+    private TextView btnSaveQueueAsPlaylist;
 
     private MusicService musicService;
     private boolean isBound = false;
@@ -47,11 +54,6 @@ public class QueueBottomSheetFragment extends BottomSheetDialogFragment {
     };
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-    }
-
-    @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_queue_bottom_sheet, container, false);
@@ -60,7 +62,10 @@ public class QueueBottomSheetFragment extends BottomSheetDialogFragment {
         txtQueueEmpty = view.findViewById(R.id.txtQueueEmpty);
         txtQueueCount = view.findViewById(R.id.txtQueueCount);
         btnClearQueue = view.findViewById(R.id.btnClearQueue);
-        btnClearQueue.setTextColor(AccentColorHelper.getAccentColor(requireContext()));
+        btnSaveQueueAsPlaylist = view.findViewById(R.id.btnSaveQueueAsPlaylist);
+
+        int accent = AccentColorHelper.getAccentColor(requireContext());
+        btnClearQueue.setTextColor(accent);
 
         btnClearQueue.setOnClickListener(v -> {
             if (isBound && musicService != null) {
@@ -70,17 +75,45 @@ public class QueueBottomSheetFragment extends BottomSheetDialogFragment {
             }
         });
 
-        // Bind to MusicService
+        if (btnSaveQueueAsPlaylist != null) {
+            btnSaveQueueAsPlaylist.setOnClickListener(v -> promptSaveQueueAsPlaylist());
+        }
+
         Intent intent = new Intent(getContext(), MusicService.class);
         requireContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
 
         return view;
     }
 
+    private void promptSaveQueueAsPlaylist() {
+        if (!isBound || musicService == null) return;
+        ArrayList<String> queue = musicService.getQueueList();
+        if (queue == null || queue.isEmpty()) {
+            Toast.makeText(getContext(), "Queue is empty", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final EditText input = new EditText(requireContext());
+        input.setHint("Playlist name");
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Save Queue as Playlist")
+                .setView(input)
+                .setPositiveButton("Save", (dialog, which) -> {
+                    String name = input.getText().toString().trim();
+                    if (!name.isEmpty()) {
+                        PlaylistManager pm = new PlaylistManager(requireContext());
+                        pm.createPlaylist(name);
+                        pm.addSongsToPlaylist(name, queue);
+                        Toast.makeText(getContext(), "Saved " + queue.size() + " tracks to '" + name + "'", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
     private void refreshQueue() {
         if (!isBound || musicService == null) return;
 
-        ArrayList<String> queue = musicService.getQueueList();
+        final ArrayList<String> queue = musicService.getQueueList();
 
         if (queue == null || queue.isEmpty()) {
             txtQueueEmpty.setVisibility(View.VISIBLE);
@@ -93,13 +126,14 @@ public class QueueBottomSheetFragment extends BottomSheetDialogFragment {
         queueListView.setVisibility(View.VISIBLE);
         txtQueueCount.setText(queue.size() + (queue.size() == 1 ? " song" : " songs"));
 
-        String[] displayNames = new String[queue.size()];
+        final String[] displayNames = new String[queue.size()];
         for (int i = 0; i < queue.size(); i++) {
             String fullPath = queue.get(i);
             String name = fullPath.substring(fullPath.lastIndexOf("/") + 1);
-            displayNames[i] = name.replace(".mp3", "").replace(".wav", "")
-                                  .replace(".m4a", "").replace(".flac", "");
+            displayNames[i] = name.replaceAll("(?i)\\.(mp3|wav|m4a|flac|ogg|aac)$", "");
         }
+
+        final float density = getResources().getDisplayMetrics().density;
 
         queueListView.setAdapter(new BaseAdapter() {
             @Override
@@ -118,34 +152,88 @@ public class QueueBottomSheetFragment extends BottomSheetDialogFragment {
             }
 
             @Override
-            public View getView(int position, View convertView, ViewGroup parent) {
+            public View getView(final int position, View convertView, ViewGroup parent) {
                 View v = getLayoutInflater().inflate(R.layout.list_items, null);
                 TextView txt = v.findViewById(R.id.txtSong);
                 TextView txtArtist = v.findViewById(R.id.txtartist);
                 ImageView img = v.findViewById(R.id.songImg);
                 ImageView btnMore = v.findViewById(R.id.btnMore);
+                FrameLayout rightActionContainer = v.findViewById(R.id.rightActionContainer);
 
                 txt.setText(displayNames[position]);
                 if (txtArtist != null) {
-                    txtArtist.setText("Queued");
+                    txtArtist.setText("#" + (position + 1) + " in queue • Tap to play");
                 }
 
                 String path = queue.get(position);
                 img.setTag(path);
 
-                // Replace the "more" button with a remove action
-                if (btnMore != null) {
-                    btnMore.setImageResource(R.drawable.ic_clear);
-                    btnMore.setOnClickListener(view -> {
+                if (rightActionContainer != null) {
+                    rightActionContainer.removeAllViews();
+                    LinearLayout controlsRow = new LinearLayout(requireContext());
+                    controlsRow.setOrientation(LinearLayout.HORIZONTAL);
+                    controlsRow.setGravity(Gravity.CENTER_VERTICAL);
+
+                    int btnSize = (int) (32 * density);
+
+                    // Move Up (▲)
+                    TextView btnUp = new TextView(requireContext());
+                    btnUp.setText("▲");
+                    btnUp.setTextSize(12f);
+                    btnUp.setGravity(Gravity.CENTER);
+                    btnUp.setTextColor(position > 0 ? Color.parseColor("#C8D0DC") : Color.parseColor("#3E4554"));
+                    btnUp.setLayoutParams(new LinearLayout.LayoutParams(btnSize, btnSize));
+                    btnUp.setEnabled(position > 0);
+                    btnUp.setOnClickListener(view -> {
+                        if (isBound && musicService != null && position > 0) {
+                            musicService.moveQueueItem(position, position - 1);
+                            refreshQueue();
+                        }
+                    });
+
+                    // Move Down (▼)
+                    TextView btnDown = new TextView(requireContext());
+                    btnDown.setText("▼");
+                    btnDown.setTextSize(12f);
+                    btnDown.setGravity(Gravity.CENTER);
+                    btnDown.setTextColor(position < queue.size() - 1 ? Color.parseColor("#C8D0DC") : Color.parseColor("#3E4554"));
+                    btnDown.setLayoutParams(new LinearLayout.LayoutParams(btnSize, btnSize));
+                    btnDown.setEnabled(position < queue.size() - 1);
+                    btnDown.setOnClickListener(view -> {
+                        if (isBound && musicService != null && position < queue.size() - 1) {
+                            musicService.moveQueueItem(position, position + 1);
+                            refreshQueue();
+                        }
+                    });
+
+                    // Remove (✕)
+                    ImageView btnRemove = new ImageView(requireContext());
+                    int pad = (int) (7 * density);
+                    btnRemove.setPadding(pad, pad, pad, pad);
+                    btnRemove.setImageResource(R.drawable.ic_clear);
+                    btnRemove.setLayoutParams(new LinearLayout.LayoutParams(btnSize, btnSize));
+                    btnRemove.setOnClickListener(view -> {
                         if (isBound && musicService != null) {
                             musicService.removeFromQueue(position);
                             refreshQueue();
                             Toast.makeText(getContext(), "Removed from queue", Toast.LENGTH_SHORT).show();
                         }
                     });
+
+                    controlsRow.addView(btnUp);
+                    controlsRow.addView(btnDown);
+                    controlsRow.addView(btnRemove);
+                    rightActionContainer.addView(controlsRow);
+                } else if (btnMore != null) {
+                    btnMore.setImageResource(R.drawable.ic_clear);
+                    btnMore.setOnClickListener(view -> {
+                        if (isBound && musicService != null) {
+                            musicService.removeFromQueue(position);
+                            refreshQueue();
+                        }
+                    });
                 }
 
-                // Load album art
                 AlbumArtLoader loader = AlbumArtLoader.getInstance();
                 Bitmap cachedBitmap = loader.getCachedThumb(path);
                 if (cachedBitmap != null) {
@@ -165,7 +253,6 @@ public class QueueBottomSheetFragment extends BottomSheetDialogFragment {
             }
         });
 
-        // Tap a queued song to play it immediately
         queueListView.setOnItemClickListener((parent, view, position, id) -> {
             if (isBound && musicService != null) {
                 musicService.playFromQueue(position);

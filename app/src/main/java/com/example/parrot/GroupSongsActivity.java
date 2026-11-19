@@ -166,6 +166,21 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
         if (btnEmptyAddSongs != null) btnEmptyAddSongs.setOnClickListener(addSongsListener);
         if (btnTopAddSongs != null) btnTopAddSongs.setOnClickListener(addSongsListener);
 
+        View btnTopExportM3u = findViewById(R.id.btnTopExportM3u);
+        if (btnTopExportM3u != null) {
+            btnTopExportM3u.setOnClickListener(v -> {
+                if ("playlist".equals(groupType) && groupName != null) {
+                    PlaylistManager pm = new PlaylistManager(GroupSongsActivity.this);
+                    File out = pm.exportPlaylistToM3u(GroupSongsActivity.this, groupName);
+                    if (out != null) {
+                        Toast.makeText(GroupSongsActivity.this, "Exported to " + out.getAbsolutePath(), Toast.LENGTH_LONG).show();
+                    } else {
+                        Toast.makeText(GroupSongsActivity.this, "Failed to export .m3u playlist", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
+        }
+
         applyAccentStyle();
         setupMultiSelect();
 
@@ -809,14 +824,32 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
                         if (favManager.isFavourite(path)) {
                             popupMenu.getMenu().findItem(R.id.action_fav).setTitle("Remove from Favourites");
                         }
+                        final int MENU_MOVE_UP = 9001;
+                        final int MENU_MOVE_DOWN = 9002;
                         if ("playlist".equals(groupType)) {
+                            if (i > 0) {
+                                popupMenu.getMenu().add(0, MENU_MOVE_UP, 0, "Move Up in Playlist");
+                            }
+                            if (i < songList.size() - 1) {
+                                popupMenu.getMenu().add(0, MENU_MOVE_DOWN, 1, "Move Down in Playlist");
+                            }
                             MenuItem deleteItem = popupMenu.getMenu().findItem(R.id.action_delete);
                             if (deleteItem != null) {
                                 deleteItem.setTitle("Remove from Playlist");
                             }
                         }
                         popupMenu.setOnMenuItemClickListener(item -> {
-                            if (item.getItemId() == R.id.action_fav) {
+                            if (item.getItemId() == MENU_MOVE_UP) {
+                                PlaylistManager pm = new PlaylistManager(GroupSongsActivity.this);
+                                pm.moveSongInPlaylist(groupName, i, i - 1);
+                                loadGroupSongs(groupType, groupName);
+                                return true;
+                            } else if (item.getItemId() == MENU_MOVE_DOWN) {
+                                PlaylistManager pm = new PlaylistManager(GroupSongsActivity.this);
+                                pm.moveSongInPlaylist(groupName, i, i + 1);
+                                loadGroupSongs(groupType, groupName);
+                                return true;
+                            } else if (item.getItemId() == R.id.action_fav) {
                                 favManager.toggleFavourite(path);
                                 Toast.makeText(GroupSongsActivity.this, favManager.isFavourite(path) ? "Added to Favourites" : "Removed from Favourites", Toast.LENGTH_SHORT).show();
                                 return true;

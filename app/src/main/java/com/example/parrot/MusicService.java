@@ -1096,6 +1096,11 @@ public class MusicService extends Service {
         queueManager.removeFromQueue(index);
         broadcastQueueUpdate();
     }
+
+    public void moveQueueItem(int fromIndex, int toIndex) {
+        queueManager.moveItem(fromIndex, toIndex);
+        broadcastQueueUpdate();
+    }
     
     public void clearQueue() {
         queueManager.clearQueue();

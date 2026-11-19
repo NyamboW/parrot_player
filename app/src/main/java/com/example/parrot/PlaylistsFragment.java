@@ -1,15 +1,20 @@
 package com.example.parrot;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.ColorStateList;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
+import android.provider.OpenableColumns;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -21,12 +26,15 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.cardview.widget.CardView;
 import androidx.fragment.app.Fragment;
 
 import java.io.File;
+import java.io.InputStream;
 import java.util.ArrayList;
 
 public class PlaylistsFragment extends Fragment {
@@ -51,6 +59,23 @@ public class PlaylistsFragment extends Fragment {
     private ListView listView;
     private final ArrayList<PlaylistRowItem> rowItems = new ArrayList<>();
     private PlaylistManager playlistManager;
+    private ActivityResultLauncher<Intent> m3uImportLauncher;
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        m3uImportLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                        Uri uri = result.getData().getData();
+                        if (uri != null && isAdded()) {
+                            importM3uFromUri(uri);
+                        }
+                    }
+                }
+        );
+    }
 
     private final BroadcastReceiver updateReceiver = new BroadcastReceiver() {
         @Override
@@ -257,18 +282,57 @@ public class PlaylistsFragment extends Fragment {
             }
 
             String playlistName = item.displayName;
+            String[] options = new String[]{
+                    "Export Playlist (.M3U)",
+                    "Rename Playlist",
+                    "Delete Playlist"
+            };
             new AlertDialog.Builder(requireContext())
-                    .setTitle("Delete Playlist")
-                    .setMessage("Are you sure you want to delete '" + playlistName + "'?")
-                    .setPositiveButton("Yes", (dialog, which) -> {
-                        playlistManager.deletePlaylist(playlistName);
-                        loadPlaylists();
-                        Toast.makeText(getContext(), "Playlist deleted", Toast.LENGTH_SHORT).show();
+                    .setTitle(playlistName)
+                    .setItems(options, (dialog, which) -> {
+                        if (which == 0) {
+                            File out = playlistManager.exportPlaylistToM3u(requireContext(), playlistName);
+                            if (out != null) {
+                                Toast.makeText(getContext(), "Exported to " + out.getAbsolutePath(), Toast.LENGTH_LONG).show();
+                            } else {
+                                Toast.makeText(getContext(), "Failed to export .m3u playlist", Toast.LENGTH_SHORT).show();
+                            }
+                        } else if (which == 1) {
+                            showRenamePlaylistDialog(playlistName);
+                        } else if (which == 2) {
+                            new AlertDialog.Builder(requireContext())
+                                    .setTitle("Delete Playlist")
+                                    .setMessage("Are you sure you want to delete '" + playlistName + "'?")
+                                    .setPositiveButton("Yes", (d, w) -> {
+                                        playlistManager.deletePlaylist(playlistName);
+                                        loadPlaylists();
+                                        Toast.makeText(getContext(), "Playlist deleted", Toast.LENGTH_SHORT).show();
+                                    })
+                                    .setNegativeButton("No", null)
+                                    .show();
+                        }
                     })
-                    .setNegativeButton("No", null)
                     .show();
             return true;
         });
+    }
+
+    private void showRenamePlaylistDialog(final String oldName) {
+        final EditText input = new EditText(requireContext());
+        input.setText(oldName);
+        input.setSelection(oldName.length());
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Rename Playlist")
+                .setView(input)
+                .setPositiveButton("Rename", (dialog, which) -> {
+                    String newName = input.getText().toString().trim();
+                    if (playlistManager.renamePlaylist(oldName, newName)) {
+                        loadPlaylists();
+                        Toast.makeText(getContext(), "Renamed to '" + newName + "'", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void setDefaultPlaylistIcon(ImageView imgCover, int padPx, int tintColor) {
@@ -292,7 +356,72 @@ public class PlaylistsFragment extends Fragment {
                 loadPlaylists();
             }
         });
+        builder.setNeutralButton("Import .M3U File", (dialog, which) -> launchM3uFilePicker());
         builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
         builder.show();
+    }
+
+    private void launchM3uFilePicker() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            m3uImportLauncher.launch(intent);
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "Unable to open file picker", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void importM3uFromUri(Uri uri) {
+        if (!isAdded()) return;
+        String fileName = "Imported Playlist";
+        try {
+            Cursor c = requireContext().getContentResolver().query(uri, null, null, null, null);
+            if (c != null) {
+                try {
+                    if (c.moveToFirst()) {
+                        int nameIdx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                        if (nameIdx >= 0) {
+                            String display = c.getString(nameIdx);
+                            if (display != null && !display.isEmpty()) {
+                                fileName = display.replaceAll("(?i)\\.(m3u8?|txt)$", "");
+                            }
+                        }
+                    }
+                } finally {
+                    c.close();
+                }
+            }
+        } catch (Exception ignored) {}
+
+        ArrayList<String> allLibrarySongs = new ArrayList<>();
+        if (PermissionHelper.hasAudioPermission(requireContext())) {
+            try {
+                Cursor cursor = requireContext().getContentResolver().query(
+                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                        new String[]{MediaStore.Audio.Media.DATA},
+                        MediaStore.Audio.Media.IS_MUSIC + "!=0",
+                        null,
+                        null
+                );
+                if (cursor != null) {
+                    while (cursor.moveToNext()) {
+                        String path = cursor.getString(0);
+                        if (path != null) allLibrarySongs.add(path);
+                    }
+                    cursor.close();
+                }
+            } catch (Exception ignored) {}
+        }
+
+        try (InputStream is = requireContext().getContentResolver().openInputStream(uri)) {
+            int added = playlistManager.importPlaylistFromM3uStream(fileName, is, allLibrarySongs);
+            loadPlaylists();
+            Toast.makeText(getContext(),
+                    "Imported '" + fileName + "' (" + added + (added == 1 ? " track)" : " tracks)"),
+                    Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "Failed to import .m3u file", Toast.LENGTH_SHORT).show();
+        }
     }
 }

@@ -92,6 +92,22 @@
                 android:textColor="#D5DCE6"
                 android:textSize="12.5sp" />
         </LinearLayout>
+
+        <TextView
+            android:id="@+id/btnTopExportM3u"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/card_surface_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="Export .M3U"
+            android:textColor="#D5DCE6"
+            android:textSize="12sp" />
     </LinearLayout>
 
     <!-- Empty Playlist View (AIMP-style Import from Folder) -->
