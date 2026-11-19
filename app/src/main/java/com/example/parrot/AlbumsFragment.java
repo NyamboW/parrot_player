@@ -11,6 +11,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -24,6 +26,7 @@ import androidx.fragment.app.Fragment;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 public class AlbumsFragment extends Fragment {
@@ -43,7 +46,10 @@ public class AlbumsFragment extends Fragment {
     }
 
     private GridView gridView;
+    private final ArrayList<AlbumItem> allAlbums = new ArrayList<>();
     private final ArrayList<AlbumItem> albums = new ArrayList<>();
+    private BaseAdapter adapter;
+    private String currentQuery = "";
 
     private final BroadcastReceiver libraryReceiver = new BroadcastReceiver() {
         @Override
@@ -54,6 +60,12 @@ public class AlbumsFragment extends Fragment {
         }
     };
 
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setHasOptionsMenu(true);
+    }
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
@@ -61,6 +73,21 @@ public class AlbumsFragment extends Fragment {
         gridView = view.findViewById(R.id.gridViewAlbums);
         loadAlbums();
         return view;
+    }
+
+    @Override
+    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+        currentQuery = "";
+        filterAlbums("");
+        ToolbarSearchHelper.setupSearchMenu(
+                requireContext(),
+                menu,
+                inflater,
+                R.menu.menu_search,
+                "Search albums or artists...",
+                this::filterAlbums
+        );
+        super.onCreateOptionsMenu(menu, inflater);
     }
 
     @Override
@@ -86,6 +113,7 @@ public class AlbumsFragment extends Fragment {
     }
 
     private void loadAlbums() {
+        allAlbums.clear();
         albums.clear();
         if (!isAdded() || !PermissionHelper.hasAudioPermission(requireContext())) return;
         Map<String, AlbumItem> albumMap = new LinkedHashMap<>();
@@ -126,9 +154,10 @@ public class AlbumsFragment extends Fragment {
             cursor.close();
         }
 
-        albums.addAll(albumMap.values());
+        allAlbums.addAll(albumMap.values());
+        applyAlbumFilter();
 
-        gridView.setAdapter(new BaseAdapter() {
+        adapter = new BaseAdapter() {
             @Override
             public int getCount() {
                 return albums.size();
@@ -182,15 +211,37 @@ public class AlbumsFragment extends Fragment {
 
                 return v;
             }
-        });
+        };
+        gridView.setAdapter(adapter);
 
         AutoHideScrollHelper.attach(gridView, getActivity(), null);
 
         gridView.setOnItemClickListener((parent, view, position, id) -> {
+            if (position < 0 || position >= albums.size()) return;
             Intent intent = new Intent(getContext(), GroupSongsActivity.class);
             intent.putExtra("type", "album");
             intent.putExtra("name", albums.get(position).name);
             startActivity(intent);
         });
+    }
+
+    private void filterAlbums(String query) {
+        currentQuery = query != null ? query : "";
+        applyAlbumFilter();
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
+    }
+
+    private void applyAlbumFilter() {
+        albums.clear();
+        String q = currentQuery.trim().toLowerCase(Locale.ROOT);
+        for (AlbumItem item : allAlbums) {
+            if (q.isEmpty()
+                    || item.name.toLowerCase(Locale.ROOT).contains(q)
+                    || item.artist.toLowerCase(Locale.ROOT).contains(q)) {
+                albums.add(item);
+            }
+        }
     }
 }

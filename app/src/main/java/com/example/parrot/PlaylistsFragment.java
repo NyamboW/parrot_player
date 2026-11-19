@@ -16,6 +16,8 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -36,6 +38,7 @@ import androidx.fragment.app.Fragment;
 import java.io.File;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Locale;
 
 public class PlaylistsFragment extends Fragment {
 
@@ -57,13 +60,17 @@ public class PlaylistsFragment extends Fragment {
     }
 
     private ListView listView;
+    private final ArrayList<PlaylistRowItem> allRowItems = new ArrayList<>();
     private final ArrayList<PlaylistRowItem> rowItems = new ArrayList<>();
+    private BaseAdapter adapter;
+    private String currentQuery = "";
     private PlaylistManager playlistManager;
     private ActivityResultLauncher<Intent> m3uImportLauncher;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setHasOptionsMenu(true);
         m3uImportLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
@@ -97,6 +104,21 @@ public class PlaylistsFragment extends Fragment {
     }
 
     @Override
+    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+        currentQuery = "";
+        filterPlaylists("");
+        ToolbarSearchHelper.setupSearchMenu(
+                requireContext(),
+                menu,
+                inflater,
+                R.menu.menu_search,
+                "Search playlists...",
+                this::filterPlaylists
+        );
+        super.onCreateOptionsMenu(menu, inflater);
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
         IntentFilter filter = new IntentFilter();
@@ -120,23 +142,25 @@ public class PlaylistsFragment extends Fragment {
     }
 
     private void loadPlaylists() {
-        rowItems.clear();
-        rowItems.add(new PlaylistRowItem(true, false, null, "Create New Playlist", "Group your favourite tracks"));
+        allRowItems.clear();
+        allRowItems.add(new PlaylistRowItem(true, false, null, "Create New Playlist", "Group your favourite tracks"));
 
         // 3 Smart Auto-Playlists
-        rowItems.add(new PlaylistRowItem(false, true,
+        allRowItems.add(new PlaylistRowItem(false, true,
                 ListeningStatsManager.SMART_RECENTLY_ADDED, "Recently Added", "Auto Playlist • "));
-        rowItems.add(new PlaylistRowItem(false, true,
+        allRowItems.add(new PlaylistRowItem(false, true,
                 ListeningStatsManager.SMART_MOST_PLAYED, "Most Played", "Auto Playlist • "));
-        rowItems.add(new PlaylistRowItem(false, true,
+        allRowItems.add(new PlaylistRowItem(false, true,
                 ListeningStatsManager.SMART_RECENTLY_PLAYED, "Recently Played", "Auto Playlist • "));
 
         // User-created custom playlists
         for (String plName : playlistManager.getPlaylists()) {
-            rowItems.add(new PlaylistRowItem(false, false, null, plName, ""));
+            allRowItems.add(new PlaylistRowItem(false, false, null, plName, ""));
         }
 
-        listView.setAdapter(new BaseAdapter() {
+        applyPlaylistFilter();
+
+        adapter = new BaseAdapter() {
             @Override
             public int getCount() {
                 return rowItems.size();
@@ -237,7 +261,8 @@ public class PlaylistsFragment extends Fragment {
 
                 return v;
             }
-        });
+        };
+        listView.setAdapter(adapter);
 
         AutoHideScrollHelper.attach(listView, getActivity(), null);
 
@@ -261,8 +286,9 @@ public class PlaylistsFragment extends Fragment {
         });
 
         listView.setOnItemLongClickListener((parent, view, position, id) -> {
-            if (position <= 0 || position >= rowItems.size()) return false;
+            if (position < 0 || position >= rowItems.size()) return false;
             PlaylistRowItem item = rowItems.get(position);
+            if (item.isCreateCard) return false;
             if (item.isSmartPlaylist) {
                 if (ListeningStatsManager.SMART_MOST_PLAYED.equals(item.smartId)
                         || ListeningStatsManager.SMART_RECENTLY_PLAYED.equals(item.smartId)) {
@@ -315,6 +341,26 @@ public class PlaylistsFragment extends Fragment {
                     .show();
             return true;
         });
+    }
+
+    private void filterPlaylists(String query) {
+        currentQuery = query != null ? query : "";
+        applyPlaylistFilter();
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
+    }
+
+    private void applyPlaylistFilter() {
+        rowItems.clear();
+        String q = currentQuery.trim().toLowerCase(Locale.ROOT);
+        for (PlaylistRowItem item : allRowItems) {
+            if (q.isEmpty()) {
+                rowItems.add(item);
+            } else if (!item.isCreateCard && item.displayName.toLowerCase(Locale.ROOT).contains(q)) {
+                rowItems.add(item);
+            }
+        }
     }
 
     private void showRenamePlaylistDialog(final String oldName) {

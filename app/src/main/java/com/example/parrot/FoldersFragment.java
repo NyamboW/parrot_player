@@ -11,6 +11,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -25,6 +27,7 @@ import androidx.fragment.app.Fragment;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 public class FoldersFragment extends Fragment {
@@ -41,7 +44,10 @@ public class FoldersFragment extends Fragment {
     }
 
     private ListView listView;
+    private final ArrayList<FolderItem> allFolders = new ArrayList<>();
     private final ArrayList<FolderItem> folders = new ArrayList<>();
+    private BaseAdapter adapter;
+    private String currentQuery = "";
 
     private final BroadcastReceiver libraryReceiver = new BroadcastReceiver() {
         @Override
@@ -52,6 +58,12 @@ public class FoldersFragment extends Fragment {
         }
     };
 
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setHasOptionsMenu(true);
+    }
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
@@ -59,6 +71,21 @@ public class FoldersFragment extends Fragment {
         listView = view.findViewById(R.id.listView);
         loadFolders();
         return view;
+    }
+
+    @Override
+    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+        currentQuery = "";
+        filterFolders("");
+        ToolbarSearchHelper.setupSearchMenu(
+                requireContext(),
+                menu,
+                inflater,
+                R.menu.menu_search,
+                "Search folders...",
+                this::filterFolders
+        );
+        super.onCreateOptionsMenu(menu, inflater);
     }
 
     @Override
@@ -84,6 +111,7 @@ public class FoldersFragment extends Fragment {
     }
 
     private void loadFolders() {
+        allFolders.clear();
         folders.clear();
         if (!isAdded() || !PermissionHelper.hasAudioPermission(requireContext())) return;
         Map<String, FolderItem> folderMap = new LinkedHashMap<>();
@@ -117,9 +145,10 @@ public class FoldersFragment extends Fragment {
             cursor.close();
         }
 
-        folders.addAll(folderMap.values());
+        allFolders.addAll(folderMap.values());
+        applyFolderFilter();
 
-        listView.setAdapter(new BaseAdapter() {
+        adapter = new BaseAdapter() {
             @Override
             public int getCount() {
                 return folders.size();
@@ -158,15 +187,37 @@ public class FoldersFragment extends Fragment {
 
                 return v;
             }
-        });
+        };
+        listView.setAdapter(adapter);
 
         AutoHideScrollHelper.attach(listView, getActivity(), null);
 
         listView.setOnItemClickListener((parent, view, position, id) -> {
+            if (position < 0 || position >= folders.size()) return;
             Intent intent = new Intent(getContext(), GroupSongsActivity.class);
             intent.putExtra("type", "folder");
             intent.putExtra("name", folders.get(position).fullPath);
             startActivity(intent);
         });
+    }
+
+    private void filterFolders(String query) {
+        currentQuery = query != null ? query : "";
+        applyFolderFilter();
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
+    }
+
+    private void applyFolderFilter() {
+        folders.clear();
+        String q = currentQuery.trim().toLowerCase(Locale.ROOT);
+        for (FolderItem item : allFolders) {
+            if (q.isEmpty()
+                    || item.name.toLowerCase(Locale.ROOT).contains(q)
+                    || item.fullPath.toLowerCase(Locale.ROOT).contains(q)) {
+                folders.add(item);
+            }
+        }
     }
 }

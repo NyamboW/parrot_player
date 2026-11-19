@@ -59,9 +59,13 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
     private ImageView imgEmptyPlaylistIcon, imgEmptyImportFolderBtn, imgTopImportFolder;
     private TextView txtEmptyImportFolderBtn, txtTopImportFolder;
 
+    private final ArrayList<String> allSongList = new ArrayList<>();
+    private String[] allItems = new String[0];
+    private String[] allArtists = new String[0];
     private final ArrayList<String> songList = new ArrayList<>();
     private String[] items = new String[0];
     private String[] artists = new String[0];
+    private String currentQuery = "";
     private FavouritesManager favManager;
     private BaseAdapter songsAdapter;
     private boolean isMultiSelectMode = false;
@@ -253,6 +257,19 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
         } catch (Exception ignored) {}
     }
 
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        ToolbarSearchHelper.setupSearchMenu(
+                this,
+                menu,
+                getMenuInflater(),
+                R.menu.menu_search,
+                "Search tracks in list...",
+                this::filterSongs
+        );
+        return true;
+    }
+
     private void setupMultiSelect() {
         listView.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE_MODAL);
         listView.setMultiChoiceModeListener(new AbsListView.MultiChoiceModeListener() {
@@ -376,6 +393,7 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
     }
 
     private void loadGroupSongs(String type, String name) {
+        allSongList.clear();
         songList.clear();
         ArrayList<String> artistList = new ArrayList<>();
 
@@ -386,7 +404,7 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
             for (String path : playlistSongs) {
                 File file = new File(path);
                 if (file.exists()) {
-                    songList.add(path);
+                    allSongList.add(path);
                     String artist = mediaStoreArtists.get(path);
                     artistList.add((artist != null && !artist.isEmpty()) ? artist : "Unknown Artist");
                 }
@@ -399,7 +417,7 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
             for (String path : smartSongs) {
                 File file = new File(path);
                 if (file.exists()) {
-                    songList.add(path);
+                    allSongList.add(path);
                     String artist = mediaStoreArtists.get(path);
                     String cleanArtist = (artist != null && !artist.isEmpty()) ? artist : "Unknown Artist";
                     if (isMostPlayed) {
@@ -448,7 +466,7 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
                             }
                         } catch (Exception ignored) {}
 
-                        songList.add(path);
+                        allSongList.add(path);
                         artistList.add(artist);
                     }
                     cursor.close();
@@ -456,23 +474,51 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
             } catch (Exception ignored) {}
         }
 
-        items = new String[songList.size()];
-        artists = new String[songList.size()];
+        allItems = new String[allSongList.size()];
+        allArtists = new String[allSongList.size()];
 
-        for (int i = 0; i < songList.size(); i++) {
-            String fullPath = songList.get(i);
+        for (int i = 0; i < allSongList.size(); i++) {
+            String fullPath = allSongList.get(i);
             String songName = fullPath.substring(fullPath.lastIndexOf("/") + 1);
-            items[i] = songName.replaceAll("(?i)\\.(mp3|wav|m4a|flac|ogg|aac)$", "");
-            artists[i] = artistList.get(i);
+            allItems[i] = songName.replaceAll("(?i)\\.(mp3|wav|m4a|flac|ogg|aac)$", "");
+            allArtists[i] = artistList.get(i);
         }
 
+        applySongFilter();
         updatePlaylistViewsVisibility();
         setAdapter();
     }
 
+    private void filterSongs(String query) {
+        currentQuery = query != null ? query : "";
+        applySongFilter();
+        updatePlaylistViewsVisibility();
+        setAdapter();
+    }
+
+    private void applySongFilter() {
+        songList.clear();
+        String q = currentQuery.trim().toLowerCase(Locale.ROOT);
+        ArrayList<String> filteredItems = new ArrayList<>();
+        ArrayList<String> filteredArtists = new ArrayList<>();
+        for (int i = 0; i < allSongList.size(); i++) {
+            String title = allItems[i] != null ? allItems[i] : "";
+            String artist = allArtists[i] != null ? allArtists[i] : "";
+            if (q.isEmpty()
+                    || title.toLowerCase(Locale.ROOT).contains(q)
+                    || artist.toLowerCase(Locale.ROOT).contains(q)) {
+                songList.add(allSongList.get(i));
+                filteredItems.add(title);
+                filteredArtists.add(artist);
+            }
+        }
+        items = filteredItems.toArray(new String[0]);
+        artists = filteredArtists.toArray(new String[0]);
+    }
+
     private void updatePlaylistViewsVisibility() {
         boolean isPlaylist = "playlist".equals(groupType);
-        boolean isEmpty = songList.isEmpty();
+        boolean isEmpty = allSongList.isEmpty();
 
         if (isPlaylist && isEmpty) {
             if (layoutPlaylistEmpty != null) layoutPlaylistEmpty.setVisibility(View.VISIBLE);
@@ -827,11 +873,13 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
                         final int MENU_MOVE_UP = 9001;
                         final int MENU_MOVE_DOWN = 9002;
                         if ("playlist".equals(groupType)) {
-                            if (i > 0) {
-                                popupMenu.getMenu().add(0, MENU_MOVE_UP, 0, "Move Up in Playlist");
-                            }
-                            if (i < songList.size() - 1) {
-                                popupMenu.getMenu().add(0, MENU_MOVE_DOWN, 1, "Move Down in Playlist");
+                            if (currentQuery.trim().isEmpty()) {
+                                if (i > 0) {
+                                    popupMenu.getMenu().add(0, MENU_MOVE_UP, 0, "Move Up in Playlist");
+                                }
+                                if (i < songList.size() - 1) {
+                                    popupMenu.getMenu().add(0, MENU_MOVE_DOWN, 1, "Move Down in Playlist");
+                                }
                             }
                             MenuItem deleteItem = popupMenu.getMenu().findItem(R.id.action_delete);
                             if (deleteItem != null) {
@@ -930,7 +978,7 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
         if (areBarsVisible == visible) return;
         areBarsVisible = visible;
         AutoHideScrollHelper.animateTopBarCollapse(toolbar, visible);
-        if (layoutPlaylistTopActions != null && "playlist".equals(groupType) && !songList.isEmpty()) {
+        if (layoutPlaylistTopActions != null && "playlist".equals(groupType) && !allSongList.isEmpty()) {
             AutoHideScrollHelper.animateTopBarCollapse(layoutPlaylistTopActions, visible);
         }
     }

@@ -11,6 +11,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -25,6 +27,7 @@ import androidx.fragment.app.Fragment;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -46,7 +49,10 @@ public class ArtistsFragment extends Fragment {
     }
 
     private ListView listView;
+    private final ArrayList<ArtistItem> allArtists = new ArrayList<>();
     private final ArrayList<ArtistItem> artists = new ArrayList<>();
+    private BaseAdapter adapter;
+    private String currentQuery = "";
 
     private final BroadcastReceiver libraryReceiver = new BroadcastReceiver() {
         @Override
@@ -57,6 +63,12 @@ public class ArtistsFragment extends Fragment {
         }
     };
 
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setHasOptionsMenu(true);
+    }
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
@@ -64,6 +76,21 @@ public class ArtistsFragment extends Fragment {
         listView = view.findViewById(R.id.listView);
         loadArtists();
         return view;
+    }
+
+    @Override
+    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+        currentQuery = "";
+        filterArtists("");
+        ToolbarSearchHelper.setupSearchMenu(
+                requireContext(),
+                menu,
+                inflater,
+                R.menu.menu_search,
+                "Search artists...",
+                this::filterArtists
+        );
+        super.onCreateOptionsMenu(menu, inflater);
     }
 
     @Override
@@ -89,6 +116,7 @@ public class ArtistsFragment extends Fragment {
     }
 
     private void loadArtists() {
+        allArtists.clear();
         artists.clear();
         if (!isAdded() || !PermissionHelper.hasAudioPermission(requireContext())) return;
         Map<String, ArtistItem> artistMap = new LinkedHashMap<>();
@@ -131,9 +159,10 @@ public class ArtistsFragment extends Fragment {
             cursor.close();
         }
 
-        artists.addAll(artistMap.values());
+        allArtists.addAll(artistMap.values());
+        applyArtistFilter();
 
-        listView.setAdapter(new BaseAdapter() {
+        adapter = new BaseAdapter() {
             @Override
             public int getCount() {
                 return artists.size();
@@ -196,15 +225,35 @@ public class ArtistsFragment extends Fragment {
 
                 return v;
             }
-        });
+        };
+        listView.setAdapter(adapter);
 
         AutoHideScrollHelper.attach(listView, getActivity(), null);
 
         listView.setOnItemClickListener((parent, view, position, id) -> {
+            if (position < 0 || position >= artists.size()) return;
             Intent intent = new Intent(getContext(), GroupSongsActivity.class);
             intent.putExtra("type", "artist");
             intent.putExtra("name", artists.get(position).name);
             startActivity(intent);
         });
+    }
+
+    private void filterArtists(String query) {
+        currentQuery = query != null ? query : "";
+        applyArtistFilter();
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
+    }
+
+    private void applyArtistFilter() {
+        artists.clear();
+        String q = currentQuery.trim().toLowerCase(Locale.ROOT);
+        for (ArtistItem item : allArtists) {
+            if (q.isEmpty() || item.name.toLowerCase(Locale.ROOT).contains(q)) {
+                artists.add(item);
+            }
+        }
     }
 }
