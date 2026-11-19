@@ -13,12 +13,12 @@
         android:id="@+id/topBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
         android:padding="16dp"
-        android:gravity="center_vertical"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintTop_toTopOf="parent">
 
         <ImageButton
             android:id="@+id/btnback"
@@ -26,23 +26,23 @@
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_back"
-            android:tint="#FFFFFF"/>
+            android:tint="#FFFFFF" />
 
         <TextView
             android:id="@+id/txtSong"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:ellipsize="marquee"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:marqueeRepeatLimit="marquee_forever"
             android:paddingStart="12dp"
             android:paddingEnd="12dp"
+            android:singleLine="true"
             android:text="Loading song..."
             android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:singleLine="true"
-            android:ellipsize="marquee"
-            android:marqueeRepeatLimit="marquee_forever"
-            android:focusable="true"
-            android:focusableInTouchMode="true"/>
+            android:textSize="16sp" />
 
         <ImageButton
             android:id="@+id/btnEq"
@@ -50,29 +50,155 @@
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_equalizer"
-            android:tint="#FFFFFF"/>
+            android:tint="#FFFFFF" />
     </LinearLayout>
 
-    <!-- Album Art -->
+    <!-- Album Art & Synced Lyrics Card -->
     <androidx.cardview.widget.CardView
         android:id="@+id/imgViewCard"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_margin="24dp"
+        app:cardBackgroundColor="#141821"
         app:cardCornerRadius="32dp"
         app:cardElevation="10dp"
-        app:cardBackgroundColor="@android:color/transparent"
-        app:layout_constraintTop_toBottomOf="@id/topBar"
         app:layout_constraintBottom_toTopOf="@id/playerControls"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-        
-        <ImageView
-            android:id="@+id/imgView"
+        app:layout_constraintTop_toBottomOf="@id/topBar">
+
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="centerCrop"
-            android:src="@drawable/ic_music" />
+            android:layout_height="match_parent">
+
+            <ImageView
+                android:id="@+id/imgView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:src="@drawable/ic_music" />
+
+            <!-- Live Synced Lyric Banner on Album Art (shown automatically when song has lyrics) -->
+            <LinearLayout
+                android:id="@+id/liveLyricBanner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:layout_margin="14dp"
+                android:background="@drawable/card_surface_bg"
+                android:clickable="true"
+                android:elevation="4dp"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="14dp"
+                android:paddingTop="10dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="10dp"
+                android:visibility="gone">
+
+                <ImageView
+                    android:id="@+id/imgLiveLyricIcon"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_lyrics"
+                    app:tint="#4CAF50" />
+
+                <TextView
+                    android:id="@+id/txtLiveLyricLine"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxLines="2"
+                    android:text="♪ Lyrics available"
+                    android:textColor="#F5F7FA"
+                    android:textSize="13.5sp" />
+
+                <TextView
+                    android:id="@+id/txtLiveLyricExpand"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="VIEW"
+                    android:textColor="#4CAF50"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Full Interactive Synced Lyrics Overlay -->
+            <LinearLayout
+                android:id="@+id/lyricsOverlayContainer"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#E60B0D13"
+                android:clickable="true"
+                android:focusable="true"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="18dp"
+                    android:paddingTop="14dp"
+                    android:paddingEnd="14dp"
+                    android:paddingBottom="8dp">
+
+                    <TextView
+                        android:id="@+id/txtLyricsBadge"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:fontFamily="sans-serif-medium"
+                        android:letterSpacing="0.08"
+                        android:text="SYNCED LYRICS"
+                        android:textColor="#4CAF50"
+                        android:textSize="11.5sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/btnCloseLyricsOverlay"
+                        android:layout_width="wrap_content"
+                        android:layout_height="28dp"
+                        android:background="@drawable/card_surface_bg"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:text="Album Art"
+                        android:textColor="#D5DCE6"
+                        android:textSize="11.5sp" />
+                </LinearLayout>
+
+                <ScrollView
+                    android:id="@+id/lyricsScrollView"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:clipToPadding="false"
+                    android:paddingStart="20dp"
+                    android:paddingTop="70dp"
+                    android:paddingEnd="20dp"
+                    android:paddingBottom="90dp"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:id="@+id/lyricsLinesContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_horizontal"
+                        android:orientation="vertical" />
+                </ScrollView>
+            </LinearLayout>
+        </FrameLayout>
     </androidx.cardview.widget.CardView>
 
     <!-- Player Controls -->
@@ -83,17 +209,17 @@
         android:orientation="vertical"
         android:padding="20dp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
 
         <!-- SeekBar -->
         <SeekBar
             android:id="@+id/seekBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:thumbTint="#FFFFFF"
+            android:progressBackgroundTint="#444"
             android:progressTint="#4CAF50"
-            android:progressBackgroundTint="#444"/>
+            android:thumbTint="#FFFFFF" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -107,12 +233,12 @@
                 android:layout_height="wrap_content"
                 android:text="0:00"
                 android:textColor="#BBBBBB"
-                android:textSize="12sp"/>
+                android:textSize="12sp" />
 
             <View
                 android:layout_width="0dp"
                 android:layout_height="1dp"
-                android:layout_weight="1"/>
+                android:layout_weight="1" />
 
             <TextView
                 android:id="@+id/txtSongEnd"
@@ -120,7 +246,7 @@
                 android:layout_height="wrap_content"
                 android:text="0:00"
                 android:textColor="#BBBBBB"
-                android:textSize="12sp"/>
+                android:textSize="12sp" />
         </LinearLayout>
 
         <!-- Main Controls -->
@@ -136,7 +262,7 @@
                 android:layout_height="50dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_previous"
-                app:tint="#FFFFFF"/>
+                app:tint="#FFFFFF" />
 
             <ImageButton
                 android:id="@+id/btnPlay"
@@ -145,7 +271,7 @@
                 android:layout_marginHorizontal="20dp"
                 android:background="@drawable/circle_button"
                 android:src="@drawable/ic_play"
-                app:tint="#FFFFFF"/>
+                app:tint="#FFFFFF" />
 
             <ImageButton
                 android:id="@+id/btnNext"
@@ -153,7 +279,7 @@
                 android:layout_height="50dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_next"
-                app:tint="#FFFFFF"/>
+                app:tint="#FFFFFF" />
         </LinearLayout>
 
         <!-- Extra Controls -->
@@ -169,43 +295,52 @@
                 android:layout_height="40dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_shuffle"
-                app:tint="#FFFFFF"/>
+                app:tint="#FFFFFF" />
 
             <ImageButton
                 android:id="@+id/btnRepeat"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:layout_marginStart="20dp"
+                android:layout_marginStart="16dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_repeat"
-                app:tint="#FFFFFF"/>
+                app:tint="#FFFFFF" />
+
+            <ImageButton
+                android:id="@+id/btnLyrics"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_lyrics"
+                app:tint="#FFFFFF" />
 
             <ImageButton
                 android:id="@+id/btnQueue"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:layout_marginStart="20dp"
+                android:layout_marginStart="16dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_queue"
-                app:tint="#FFFFFF"/>
+                app:tint="#FFFFFF" />
 
             <ImageButton
                 android:id="@+id/btnMic"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:layout_marginStart="20dp"
+                android:layout_marginStart="16dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_mic"
-                app:tint="#FFFFFF"/>
+                app:tint="#FFFFFF" />
 
             <ImageButton
                 android:id="@+id/btnfav"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:layout_marginStart="20dp"
+                android:layout_marginStart="16dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_fav"
-                app:tint="#FFFFFF"/>
+                app:tint="#FFFFFF" />
         </LinearLayout>
 
     </LinearLayout>

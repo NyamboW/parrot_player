@@ -11,6 +11,7 @@ import android.content.ServiceConnection;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -18,12 +19,16 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.speech.RecognizerIntent;
 import android.view.GestureDetector;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.OvershootInterpolator;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -54,7 +59,17 @@ public class PlayerActivity extends AppCompatActivity {
     ImageView imgView;
     CardView imgViewCard;
 
-    ImageButton btnPlay, btnNext, btnPrev, btnRepeat, btnShuffle, btnFav, btnEq, btnBack, btnQueue, btnMic;
+    ImageButton btnPlay, btnNext, btnPrev, btnRepeat, btnShuffle, btnFav, btnEq, btnBack, btnQueue, btnMic, btnLyrics;
+
+    private LinearLayout liveLyricBanner, lyricsOverlayContainer, lyricsLinesContainer;
+    private ImageView imgLiveLyricIcon;
+    private TextView txtLiveLyricLine, txtLiveLyricExpand, txtLyricsBadge, btnCloseLyricsOverlay;
+    private ScrollView lyricsScrollView;
+    private final ArrayList<TextView> lyricLineViews = new ArrayList<>();
+    private LyricsExtractor.LyricsData currentLyricsData = LyricsExtractor.LyricsData.EMPTY;
+    private String lyricsLoadedForPath = null;
+    private int activeLyricLineIndex = -1;
+    private boolean isLyricsOverlayVisible = false;
 
     FavouritesManager favManager;
     String currentSongPath;
@@ -137,6 +152,8 @@ public class PlayerActivity extends AppCompatActivity {
                 if (songPath != null) {
                     currentSongPath = songPath;
                     updateFavIcon(false);
+                    loadLyricsForSong(songPath);
+                    syncLyricsToPosition(currentPos, duration);
                 }
             } else if (intent.getAction().equals("com.example.parrot.CLOSE_APP")) {
                 finishAffinity();
@@ -169,6 +186,17 @@ public class PlayerActivity extends AppCompatActivity {
         btnBack = findViewById(R.id.btnback);
         btnQueue = findViewById(R.id.btnQueue);
         btnMic = findViewById(R.id.btnMic);
+        btnLyrics = findViewById(R.id.btnLyrics);
+
+        liveLyricBanner = findViewById(R.id.liveLyricBanner);
+        imgLiveLyricIcon = findViewById(R.id.imgLiveLyricIcon);
+        txtLiveLyricLine = findViewById(R.id.txtLiveLyricLine);
+        txtLiveLyricExpand = findViewById(R.id.txtLiveLyricExpand);
+        lyricsOverlayContainer = findViewById(R.id.lyricsOverlayContainer);
+        txtLyricsBadge = findViewById(R.id.txtLyricsBadge);
+        btnCloseLyricsOverlay = findViewById(R.id.btnCloseLyricsOverlay);
+        lyricsScrollView = findViewById(R.id.lyricsScrollView);
+        lyricsLinesContainer = findViewById(R.id.lyricsLinesContainer);
 
         txtSong.setSelected(true);
         applyAccentTheme();
@@ -197,6 +225,7 @@ public class PlayerActivity extends AppCompatActivity {
                 setSongTitle(cleanFileName(new File(initialSongPath).getName()));
                 currentSongPath = initialSongPath;
                 updateFavIcon(false);
+                loadLyricsForSong(initialSongPath);
             }
 
             Intent serviceIntent = new Intent(this, MusicService.class);
@@ -215,8 +244,25 @@ public class PlayerActivity extends AppCompatActivity {
         bindService(bindIntent, serviceConnection, Context.BIND_AUTO_CREATE);
 
         attachPressAnimation(btnPlay, btnNext, btnPrev, btnShuffle, btnRepeat, btnFav, btnQueue, btnEq, btnBack,
-                btnMic);
+                btnMic, btnLyrics);
         setupAlbumArtSwipe();
+
+        if (btnLyrics != null) {
+            btnLyrics.setOnClickListener(v -> {
+                popView(btnLyrics);
+                if (!currentLyricsData.hasLyrics()) {
+                    Toast.makeText(this, "No lyrics found for this song", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                setLyricsOverlayVisible(!isLyricsOverlayVisible);
+            });
+        }
+        if (liveLyricBanner != null) {
+            liveLyricBanner.setOnClickListener(v -> setLyricsOverlayVisible(true));
+        }
+        if (btnCloseLyricsOverlay != null) {
+            btnCloseLyricsOverlay.setOnClickListener(v -> setLyricsOverlayVisible(false));
+        }
 
         btnPlay.setOnClickListener(v -> triggerPlayPause());
         btnNext.setOnClickListener(v -> triggerNext());
@@ -274,6 +320,7 @@ public class PlayerActivity extends AppCompatActivity {
                     musicService.seekTo(target);
                 }
                 txtStart.setText(formatTime(target));
+                syncLyricsToPosition(target, seekBar.getMax());
             }
         });
 
@@ -332,6 +379,8 @@ public class PlayerActivity extends AppCompatActivity {
         if (songPath != null) {
             currentSongPath = songPath;
             updateFavIcon(false);
+            loadLyricsForSong(songPath);
+            syncLyricsToPosition(currentPos, duration);
             if (!songPath.equals(imgView.getTag())) {
                 imgView.setTag(songPath);
                 loadAlbumArt(songPath, false);
@@ -522,9 +571,19 @@ public class PlayerActivity extends AppCompatActivity {
         if (seekBar != null) {
             seekBar.setProgressTintList(ColorStateList.valueOf(accent));
         }
+        if (imgLiveLyricIcon != null) {
+            imgLiveLyricIcon.setImageTintList(ColorStateList.valueOf(accent));
+        }
+        if (txtLiveLyricExpand != null) {
+            txtLiveLyricExpand.setTextColor(accent);
+        }
+        if (txtLyricsBadge != null) {
+            txtLyricsBadge.setTextColor(accent);
+        }
         updateToggleButton(btnShuffle, isShuffle);
         updateToggleButton(btnRepeat, isRepeat);
         updateFavIcon(false);
+        updateLyricsButtonState();
     }
 
     private void setSongTitle(String title) {
@@ -622,11 +681,193 @@ public class PlayerActivity extends AppCompatActivity {
                     int current = musicService.getCurrentPosition();
                     seekBar.setProgress(current);
                     txtStart.setText(formatTime(current));
+                    syncLyricsToPosition(current, duration);
                 }
                 handler.postDelayed(this, SEEKBAR_UPDATE_INTERVAL_MS);
             }
         };
         handler.post(updateSeekBar);
+    }
+
+    private void loadLyricsForSong(final String path) {
+        if (path == null || path.isEmpty() || path.equals(lyricsLoadedForPath)) {
+            return;
+        }
+        lyricsLoadedForPath = path;
+        activeLyricLineIndex = -1;
+
+        LyricsExtractor.loadLyricsAsync(path, data -> {
+            if (isFinishing() || isDestroyed() || !path.equals(currentSongPath)) {
+                return;
+            }
+            currentLyricsData = (data != null) ? data : LyricsExtractor.LyricsData.EMPTY;
+            activeLyricLineIndex = -1;
+
+            if (currentLyricsData.hasLyrics()) {
+                if (txtLyricsBadge != null) {
+                    txtLyricsBadge.setText(currentLyricsData.isSynced
+                            ? "SYNCED LYRICS • TAP LINE TO SEEK"
+                            : "LYRICS");
+                }
+                buildLyricsViews();
+                if (!isLyricsOverlayVisible && liveLyricBanner != null) {
+                    liveLyricBanner.setVisibility(View.VISIBLE);
+                }
+                int pos = (isBound && musicService != null) ? musicService.getCurrentPosition() : seekBar.getProgress();
+                int dur = (isBound && musicService != null) ? musicService.getDuration() : seekBar.getMax();
+                syncLyricsToPosition(pos, dur);
+            } else {
+                lyricLineViews.clear();
+                if (lyricsLinesContainer != null) {
+                    lyricsLinesContainer.removeAllViews();
+                }
+                if (liveLyricBanner != null) {
+                    liveLyricBanner.setVisibility(View.GONE);
+                }
+                if (isLyricsOverlayVisible) {
+                    setLyricsOverlayVisible(false);
+                }
+            }
+            updateLyricsButtonState();
+        });
+    }
+
+    private void buildLyricsViews() {
+        if (lyricsLinesContainer == null) return;
+        lyricsLinesContainer.removeAllViews();
+        lyricLineViews.clear();
+
+        float density = getResources().getDisplayMetrics().density;
+        int vPad = (int) (10 * density);
+        int hPad = (int) (8 * density);
+
+        for (int i = 0; i < currentLyricsData.lines.size(); i++) {
+            final LyricsExtractor.LyricLine line = currentLyricsData.lines.get(i);
+            final int lineIdx = i;
+
+            TextView tv = new TextView(this);
+            tv.setText(line.text);
+            tv.setGravity(Gravity.CENTER);
+            tv.setTextSize(15.5f);
+            tv.setTextColor(Color.parseColor("#8A93A2"));
+            tv.setPadding(hPad, vPad, hPad, vPad);
+            tv.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+            ));
+
+            if (currentLyricsData.isSynced && line.timeMs >= 0) {
+                tv.setBackgroundResource(android.R.drawable.list_selector_background);
+                tv.setClickable(true);
+                tv.setFocusable(true);
+                tv.setOnClickListener(v -> {
+                    int targetMs = (int) line.timeMs;
+                    if (isBound && musicService != null) {
+                        musicService.seekTo(targetMs);
+                    }
+                    seekBar.setProgress(targetMs);
+                    txtStart.setText(formatTime(targetMs));
+                    highlightActiveLyricLine(lineIdx, true);
+                });
+            }
+
+            lyricLineViews.add(tv);
+            lyricsLinesContainer.addView(tv);
+        }
+    }
+
+    private void setLyricsOverlayVisible(boolean visible) {
+        isLyricsOverlayVisible = visible;
+        if (lyricsOverlayContainer != null) {
+            if (visible) {
+                lyricsOverlayContainer.setAlpha(0f);
+                lyricsOverlayContainer.setVisibility(View.VISIBLE);
+                lyricsOverlayContainer.animate().alpha(1f).setDuration(180).start();
+                if (activeLyricLineIndex >= 0) {
+                    scrollToLyricLine(activeLyricLineIndex, false);
+                }
+            } else {
+                lyricsOverlayContainer.animate()
+                        .alpha(0f)
+                        .setDuration(150)
+                        .withEndAction(() -> lyricsOverlayContainer.setVisibility(View.GONE))
+                        .start();
+            }
+        }
+        if (liveLyricBanner != null) {
+            liveLyricBanner.setVisibility((!visible && currentLyricsData.hasLyrics()) ? View.VISIBLE : View.GONE);
+        }
+        updateLyricsButtonState();
+    }
+
+    private void updateLyricsButtonState() {
+        if (btnLyrics == null) return;
+        int accent = AccentColorHelper.getAccentColor(this);
+        boolean hasLyrics = currentLyricsData != null && currentLyricsData.hasLyrics();
+        if (isLyricsOverlayVisible) {
+            btnLyrics.setAlpha(1.0f);
+            ImageViewCompat.setImageTintList(btnLyrics, ColorStateList.valueOf(accent));
+        } else if (hasLyrics) {
+            btnLyrics.setAlpha(0.95f);
+            ImageViewCompat.setImageTintList(btnLyrics, ColorStateList.valueOf(COLOR_WHITE));
+        } else {
+            btnLyrics.setAlpha(0.38f);
+            ImageViewCompat.setImageTintList(btnLyrics, ColorStateList.valueOf(COLOR_WHITE));
+        }
+    }
+
+    private void syncLyricsToPosition(long positionMs, long durationMs) {
+        if (currentLyricsData == null || !currentLyricsData.hasLyrics()) return;
+        int newIdx = currentLyricsData.findActiveLineIndex(positionMs, durationMs);
+        if (newIdx < 0 || newIdx >= currentLyricsData.lines.size()) return;
+
+        if (newIdx != activeLyricLineIndex) {
+            highlightActiveLyricLine(newIdx, true);
+        }
+    }
+
+    private void highlightActiveLyricLine(int newIdx, boolean smoothScroll) {
+        if (newIdx < 0 || newIdx >= lyricLineViews.size()) return;
+        int prevIdx = activeLyricLineIndex;
+        activeLyricLineIndex = newIdx;
+
+        int accent = AccentColorHelper.getAccentColor(this);
+
+        if (prevIdx >= 0 && prevIdx < lyricLineViews.size()) {
+            TextView prevView = lyricLineViews.get(prevIdx);
+            prevView.setTextColor(Color.parseColor("#8A93A2"));
+            prevView.setTextSize(15.5f);
+            prevView.setTypeface(null, Typeface.NORMAL);
+        }
+
+        TextView activeView = lyricLineViews.get(newIdx);
+        activeView.setTextColor(accent);
+        activeView.setTextSize(18.5f);
+        activeView.setTypeface(null, Typeface.BOLD);
+
+        if (txtLiveLyricLine != null) {
+            txtLiveLyricLine.setText("♪  " + currentLyricsData.lines.get(newIdx).text);
+        }
+
+        if (isLyricsOverlayVisible) {
+            scrollToLyricLine(newIdx, smoothScroll);
+        }
+    }
+
+    private void scrollToLyricLine(final int lineIdx, final boolean smooth) {
+        if (lyricsScrollView == null || lineIdx < 0 || lineIdx >= lyricLineViews.size()) return;
+        final TextView targetView = lyricLineViews.get(lineIdx);
+        lyricsScrollView.post(() -> {
+            int scrollHeight = lyricsScrollView.getHeight();
+            if (scrollHeight <= 0) return;
+            int lineCenter = targetView.getTop() + (targetView.getHeight() / 2);
+            int targetScrollY = Math.max(0, lineCenter - (scrollHeight / 2) + lyricsScrollView.getPaddingTop());
+            if (smooth) {
+                lyricsScrollView.smoothScrollTo(0, targetScrollY);
+            } else {
+                lyricsScrollView.scrollTo(0, targetScrollY);
+            }
+        });
     }
 
     private void stopSeekBarUpdate() {
