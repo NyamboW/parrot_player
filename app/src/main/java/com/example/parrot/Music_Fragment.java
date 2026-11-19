@@ -235,11 +235,7 @@ public class Music_Fragment extends Fragment {
                 }
 
                 if (id == R.id.action_play_selected) {
-                    AlbumArtLoader.getInstance().preloadFullArt(selectedPaths.get(0));
-                    Intent intent = new Intent(getContext(), PlayerActivity.class);
-                    intent.putStringArrayListExtra("songs", selectedPaths);
-                    intent.putExtra("pos", 0);
-                    startActivity(intent);
+                    MusicService.startPlaybackList(requireActivity(), selectedPaths, 0);
                     mode.finish();
                     return true;
                 } else if (id == R.id.action_add_to_queue) {
@@ -576,11 +572,7 @@ public class Music_Fragment extends Fragment {
             int actualPosition = songList.indexOf(tappedPath);
             if (actualPosition == -1) actualPosition = position;
 
-            AlbumArtLoader.getInstance().preloadFullArt(tappedPath);
-            Intent intent = new Intent(getContext(), PlayerActivity.class);
-            intent.putStringArrayListExtra("songs", songList);
-            intent.putExtra("pos", actualPosition);
-            startActivity(intent);
+            MusicService.startPlaybackList(requireActivity(), songList, actualPosition);
         });
     }
 

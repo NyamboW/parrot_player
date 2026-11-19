@@ -326,11 +326,7 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
                 }
 
                 if (id == R.id.action_play_selected) {
-                    AlbumArtLoader.getInstance().preloadFullArt(selectedPaths.get(0));
-                    Intent intent = new Intent(GroupSongsActivity.this, PlayerActivity.class);
-                    intent.putStringArrayListExtra("songs", selectedPaths);
-                    intent.putExtra("pos", 0);
-                    startActivity(intent);
+                    MusicService.startPlaybackList(GroupSongsActivity.this, selectedPaths, 0);
                     mode.finish();
                     return true;
                 } else if (id == R.id.action_add_to_queue) {
@@ -967,15 +963,8 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
         listView.setAdapter(songsAdapter);
         AutoHideScrollHelper.attach(listView, this, null);
 
-        listView.setOnItemClickListener((parent, view, position, id) -> {
-            if (position >= 0 && position < songList.size()) {
-                AlbumArtLoader.getInstance().preloadFullArt(songList.get(position));
-            }
-            Intent intent = new Intent(this, PlayerActivity.class);
-            intent.putStringArrayListExtra("songs", songList);
-            intent.putExtra("pos", position);
-            startActivity(intent);
-        });
+        listView.setOnItemClickListener((parent, view, position, id) ->
+                MusicService.startPlaybackList(this, songList, position));
     }
 
     @Override

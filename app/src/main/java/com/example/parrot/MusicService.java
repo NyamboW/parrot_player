@@ -399,6 +399,30 @@ public class MusicService extends Service {
         return START_NOT_STICKY;
     }
 
+    /**
+     * Starts playing a track list directly in the service without opening full-screen PlayerActivity.
+     */
+    public static void startPlaybackList(Context context, ArrayList<String> songs, int pos) {
+        if (context == null || songs == null || songs.isEmpty()) return;
+        int safePos = Math.max(0, Math.min(pos, songs.size() - 1));
+        String targetPath = songs.get(safePos);
+        if (targetPath != null) {
+            AlbumArtLoader.getInstance().preloadFullArt(targetPath);
+        }
+        Intent serviceIntent = new Intent(context, MusicService.class);
+        serviceIntent.setAction(ACTION_START);
+        serviceIntent.putStringArrayListExtra("songs", songs);
+        serviceIntent.putExtra("pos", safePos);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(serviceIntent);
+        } else {
+            context.startService(serviceIntent);
+        }
+        if (context instanceof AutoHideScrollHelper.ScrollBarController) {
+            ((AutoHideScrollHelper.ScrollBarController) context).setBarsVisible(true);
+        }
+    }
+
     public void playSong(int pos) {
         position = pos;
         if (mySongs.isEmpty() || position < 0 || position >= mySongs.size()) return;
