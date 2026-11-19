@@ -82,6 +82,11 @@ public class PlayerActivity extends AppCompatActivity {
 
     private TrackMetadataHelper.TrackInfo currentTrackInfo = null;
     private String metadataLoadedForPath = null;
+    private LinearLayout btnTimerSpeed;
+    private ImageView imgTimerSpeedIcon;
+    private TextView txtTimerSpeedStatus;
+    private String lastTimerSpeedText = "";
+    private boolean lastTimerSpeedActive = false;
 
     FavouritesManager favManager;
     String currentSongPath;
@@ -219,6 +224,9 @@ public class PlayerActivity extends AppCompatActivity {
         btnQueue = findViewById(R.id.btnQueue);
         btnMic = findViewById(R.id.btnMic);
         btnLyrics = findViewById(R.id.btnLyrics);
+        btnTimerSpeed = findViewById(R.id.btnTimerSpeed);
+        imgTimerSpeedIcon = findViewById(R.id.imgTimerSpeedIcon);
+        txtTimerSpeedStatus = findViewById(R.id.txtTimerSpeedStatus);
 
         liveLyricBanner = findViewById(R.id.liveLyricBanner);
         imgLiveLyricIcon = findViewById(R.id.imgLiveLyricIcon);
@@ -309,6 +317,12 @@ public class PlayerActivity extends AppCompatActivity {
         }
         if (txtAbLoopPill != null) {
             txtAbLoopPill.setOnClickListener(v -> cycleAbLoopState());
+        }
+        if (btnTimerSpeed != null) {
+            btnTimerSpeed.setOnClickListener(v -> {
+                popView(btnTimerSpeed);
+                showQuickTimerSpeedDialog();
+            });
         }
 
         btnPlay.setOnClickListener(v -> triggerPlayPause());
@@ -441,6 +455,7 @@ public class PlayerActivity extends AppCompatActivity {
             loadLyricsForSong(songPath);
             syncLyricsToPosition(currentPos, duration);
             updateAbLoopPillStyle();
+            updateTimerSpeedBadge();
             if (!songPath.equals(imgView.getTag())) {
                 imgView.setTag(songPath);
                 loadAlbumArt(songPath, false);
@@ -773,6 +788,213 @@ public class PlayerActivity extends AppCompatActivity {
         }
     }
 
+    private float getActivePlaybackSpeed() {
+        if (isBound && musicService != null) {
+            return musicService.getPlaybackSpeed();
+        }
+        return getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE)
+                .getFloat(SettingsFragment.KEY_PLAYBACK_SPEED, 1.0f);
+    }
+
+    private void updateTimerSpeedBadge() {
+        if (btnTimerSpeed == null) return;
+        long remainingMs = (isBound && musicService != null) ? musicService.getSleepTimerRemainingMs() : 0L;
+        float speed = getActivePlaybackSpeed();
+        boolean hasTimer = remainingMs > 0L;
+        boolean hasCustomSpeed = Math.abs(speed - 1.0f) >= 0.04f;
+        boolean active = hasTimer || hasCustomSpeed;
+
+        StringBuilder label = new StringBuilder();
+        if (hasCustomSpeed) {
+            label.append(formatSpeedChip(speed));
+        }
+        if (hasTimer) {
+            if (label.length() > 0) label.append(" • ");
+            label.append(formatTime((int) Math.min(Integer.MAX_VALUE, remainingMs)));
+        }
+        String text = label.toString();
+
+        if (!text.equals(lastTimerSpeedText)) {
+            lastTimerSpeedText = text;
+            if (txtTimerSpeedStatus != null) {
+                txtTimerSpeedStatus.setText(text);
+                txtTimerSpeedStatus.setVisibility(text.isEmpty() ? View.GONE : View.VISIBLE);
+            }
+        }
+        if (active != lastTimerSpeedActive) {
+            lastTimerSpeedActive = active;
+            int accent = AccentColorHelper.getAccentColor(this);
+            float density = getResources().getDisplayMetrics().density;
+            if (active) {
+                btnTimerSpeed.setBackground(AccentColorHelper.createRoundedRect(
+                        AccentColorHelper.withAlpha(accent, 0x24),
+                        AccentColorHelper.withAlpha(accent, 0x60),
+                        (int) (1 * density),
+                        16f * density
+                ));
+                if (imgTimerSpeedIcon != null) {
+                    ImageViewCompat.setImageTintList(imgTimerSpeedIcon, ColorStateList.valueOf(accent));
+                }
+                if (txtTimerSpeedStatus != null) {
+                    txtTimerSpeedStatus.setTextColor(accent);
+                }
+            } else {
+                btnTimerSpeed.setBackgroundResource(R.drawable.card_surface_bg);
+                if (imgTimerSpeedIcon != null) {
+                    ImageViewCompat.setImageTintList(imgTimerSpeedIcon, ColorStateList.valueOf(COLOR_WHITE));
+                }
+            }
+        }
+    }
+
+    private String formatSpeedChip(float speed) {
+        if (Math.abs(speed - Math.round(speed)) < 0.04f) {
+            return Math.round(speed) + "×";
+        }
+        String s = String.format(Locale.US, "%.2f", speed).replaceAll("0+$", "");
+        if (s.endsWith(".")) s = s.substring(0, s.length() - 1);
+        return s + "×";
+    }
+
+    private void showQuickTimerSpeedDialog() {
+        final float density = getResources().getDisplayMetrics().density;
+        final int accent = AccentColorHelper.getAccentColor(this);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.parseColor("#141821"));
+        int outerPad = (int) (20 * density);
+        root.setPadding(outerPad, (int) (18 * density), outerPad, (int) (12 * density));
+
+        long remainingMs = (isBound && musicService != null) ? musicService.getSleepTimerRemainingMs() : 0L;
+        TextView timerHeader = new TextView(this);
+        timerHeader.setText(remainingMs > 0L
+                ? "SLEEP TIMER  •  " + formatTime((int) remainingMs) + " left"
+                : "SLEEP TIMER");
+        timerHeader.setTextColor(accent);
+        timerHeader.setTextSize(11.5f);
+        timerHeader.setLetterSpacing(0.08f);
+        timerHeader.setTypeface(null, Typeface.BOLD);
+        root.addView(timerHeader);
+
+        final android.app.AlertDialog[] dialogHolder = new android.app.AlertDialog[1];
+
+        int[] timerMinutes = new int[]{0, 15, 30, 45, 60, 90};
+        String[] timerLabels = new String[]{"Off", "15m", "30m", "45m", "60m", "90m"};
+        addChipGrid(root, density, 3, timerLabels.length, index -> {
+            final int mins = timerMinutes[index];
+            boolean isSelected = (mins == 0 && remainingMs <= 0L);
+            return buildOptionChip(timerLabels[index], isSelected, accent, density, v -> {
+                if (isBound && musicService != null) {
+                    musicService.setSleepTimerMinutes(mins);
+                }
+                lastTimerSpeedActive = !lastTimerSpeedActive;
+                updateTimerSpeedBadge();
+                Toast.makeText(this, mins == 0 ? "Sleep timer cancelled" : "Sleep timer set for " + mins + " min", Toast.LENGTH_SHORT).show();
+                if (dialogHolder[0] != null) dialogHolder[0].dismiss();
+            });
+        });
+
+        TextView speedHeader = new TextView(this);
+        float currentSpeed = getActivePlaybackSpeed();
+        speedHeader.setText("PLAYBACK SPEED  •  " + formatSpeedChip(currentSpeed));
+        speedHeader.setTextColor(accent);
+        speedHeader.setTextSize(11.5f);
+        speedHeader.setLetterSpacing(0.08f);
+        speedHeader.setTypeface(null, Typeface.BOLD);
+        LinearLayout.LayoutParams shParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        shParams.topMargin = (int) (18 * density);
+        speedHeader.setLayoutParams(shParams);
+        root.addView(speedHeader);
+
+        final float[] speeds = new float[]{0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f};
+        final TextView[] speedChips = new TextView[speeds.length];
+        addChipGrid(root, density, 3, speeds.length, index -> {
+            final float targetSpeed = speeds[index];
+            boolean isSelected = Math.abs(currentSpeed - targetSpeed) < 0.04f;
+            TextView chip = buildOptionChip(formatSpeedChip(targetSpeed), isSelected, accent, density, v -> {
+                getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE)
+                        .edit()
+                        .putFloat(SettingsFragment.KEY_PLAYBACK_SPEED, targetSpeed)
+                        .apply();
+                if (isBound && musicService != null) {
+                    musicService.setPlaybackSpeed(targetSpeed);
+                }
+                speedHeader.setText("PLAYBACK SPEED  •  " + formatSpeedChip(targetSpeed));
+                for (int k = 0; k < speedChips.length; k++) {
+                    if (speedChips[k] != null) {
+                        styleOptionChip(speedChips[k], Math.abs(speeds[k] - targetSpeed) < 0.04f, accent, density);
+                    }
+                }
+                lastTimerSpeedActive = !lastTimerSpeedActive;
+                updateTimerSpeedBadge();
+            });
+            speedChips[index] = chip;
+            return chip;
+        });
+
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
+                .setView(root)
+                .setPositiveButton("Done", null)
+                .create();
+        dialogHolder[0] = dialog;
+        dialog.show();
+    }
+
+    private interface ChipFactory {
+        TextView create(int index);
+    }
+
+    private void addChipGrid(LinearLayout parent, float density, int columns, int count, ChipFactory factory) {
+        int gap = (int) (8 * density);
+        LinearLayout row = null;
+        for (int i = 0; i < count; i++) {
+            if (i % columns == 0) {
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                rp.topMargin = (int) (10 * density);
+                row.setLayoutParams(rp);
+                parent.addView(row);
+            }
+            TextView chip = factory.create(i);
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(0, (int) (38 * density), 1f);
+            if (i % columns < columns - 1) cp.rightMargin = gap;
+            chip.setLayoutParams(cp);
+            row.addView(chip);
+        }
+    }
+
+    private TextView buildOptionChip(String label, boolean selected, int accent, float density, View.OnClickListener clickListener) {
+        TextView chip = new TextView(this);
+        chip.setText(label);
+        chip.setGravity(Gravity.CENTER);
+        chip.setTextSize(13f);
+        chip.setTypeface(null, Typeface.BOLD);
+        chip.setClickable(true);
+        chip.setFocusable(true);
+        styleOptionChip(chip, selected, accent, density);
+        chip.setOnClickListener(clickListener);
+        return chip;
+    }
+
+    private void styleOptionChip(TextView chip, boolean selected, int accent, float density) {
+        if (selected) {
+            chip.setTextColor(accent);
+            chip.setBackground(AccentColorHelper.createRoundedRect(
+                    AccentColorHelper.withAlpha(accent, 0x26),
+                    AccentColorHelper.withAlpha(accent, 0x66),
+                    (int) (1 * density),
+                    12f * density
+            ));
+        } else {
+            chip.setTextColor(Color.parseColor("#D5DCE6"));
+            chip.setBackgroundResource(R.drawable.card_surface_bg);
+        }
+    }
+
     private void applyAccentTheme() {
         int accent = AccentColorHelper.getAccentColor(this);
         if (seekBar != null) {
@@ -792,6 +1014,8 @@ public class PlayerActivity extends AppCompatActivity {
         updateFavIcon(false);
         updateLyricsButtonState();
         updateAbLoopPillStyle();
+        lastTimerSpeedActive = !lastTimerSpeedActive; // Force badge re-tint on accent change
+        updateTimerSpeedBadge();
     }
 
     private void setSongTitle(String title) {
@@ -890,6 +1114,7 @@ public class PlayerActivity extends AppCompatActivity {
                     seekBar.setProgress(current);
                     txtStart.setText(formatTime(current));
                     syncLyricsToPosition(current, duration);
+                    updateTimerSpeedBadge();
                 }
                 handler.postDelayed(this, SEEKBAR_UPDATE_INTERVAL_MS);
             }

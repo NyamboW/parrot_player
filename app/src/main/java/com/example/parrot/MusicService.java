@@ -1591,6 +1591,10 @@ public class MusicService extends Service {
         }
     }
 
+    public float getPlaybackSpeed() {
+        return playbackSpeed;
+    }
+
     private void applyPlaybackSpeed() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && mediaPlayer != null && isPrepared) {
             try {
