@@ -650,6 +650,7 @@
             android:id="@+id/setting_keep_screen_on"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
             android:background="@drawable/card_surface_bg"
             android:clickable="true"
             android:focusable="true"
@@ -691,6 +692,56 @@
 
             <androidx.appcompat.widget.SwitchCompat
                 android:id="@+id/switchKeepScreenOn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <!-- Show Lyrics Banner by Default -->
+        <LinearLayout
+            android:id="@+id/setting_show_lyrics_banner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/card_surface_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="14dp">
+
+            <ImageView
+                android:id="@+id/iconShowLyricsBanner"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_lyrics"
+                app:tint="#4CAF50" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="Show Lyrics Banner by Default"
+                    android:textColor="#F5F7FA"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Display live mini lyrics bar on album art automatically"
+                    android:textColor="#9AA3B2"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switchShowLyricsBanner"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
         </LinearLayout>

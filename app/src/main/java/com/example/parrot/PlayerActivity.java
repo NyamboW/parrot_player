@@ -79,6 +79,7 @@ public class PlayerActivity extends AppCompatActivity {
     private String lyricsLoadedForPath = null;
     private int activeLyricLineIndex = -1;
     private boolean isLyricsOverlayVisible = false;
+    private boolean isSmallLyricsVisible = false;
 
     private TrackMetadataHelper.TrackInfo currentTrackInfo = null;
     private String metadataLoadedForPath = null;
@@ -240,6 +241,8 @@ public class PlayerActivity extends AppCompatActivity {
 
         txtSong.setSelected(true);
         applyAccentTheme();
+        refreshLyricsBannerVisibility();
+        updateLyricsButtonState();
 
         voiceCommandLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
@@ -296,14 +299,26 @@ public class PlayerActivity extends AppCompatActivity {
                     Toast.makeText(this, "No lyrics found for this song", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                setLyricsOverlayVisible(!isLyricsOverlayVisible);
+                if (isLyricsOverlayVisible) {
+                    isSmallLyricsVisible = false;
+                    setLyricsOverlayVisible(false);
+                } else if (shouldShowSmallLyricsByDefault() || isSmallLyricsVisible) {
+                    setLyricsOverlayVisible(true);
+                } else {
+                    isSmallLyricsVisible = true;
+                    refreshLyricsBannerVisibility();
+                    updateLyricsButtonState();
+                }
             });
         }
         if (liveLyricBanner != null) {
             liveLyricBanner.setOnClickListener(v -> setLyricsOverlayVisible(true));
         }
         if (btnCloseLyricsOverlay != null) {
-            btnCloseLyricsOverlay.setOnClickListener(v -> setLyricsOverlayVisible(false));
+            btnCloseLyricsOverlay.setOnClickListener(v -> {
+                isSmallLyricsVisible = false;
+                setLyricsOverlayVisible(false);
+            });
         }
         if (txtArtistAlbum != null) {
             txtArtistAlbum.setOnClickListener(v -> onArtistAlbumSubtitleClicked());
@@ -1135,6 +1150,7 @@ public class PlayerActivity extends AppCompatActivity {
             }
             currentLyricsData = (data != null) ? data : LyricsExtractor.LyricsData.EMPTY;
             activeLyricLineIndex = -1;
+            isSmallLyricsVisible = false;
 
             if (currentLyricsData.hasLyrics()) {
                 if (txtLyricsBadge != null) {
@@ -1143,9 +1159,7 @@ public class PlayerActivity extends AppCompatActivity {
                             : "LYRICS");
                 }
                 buildLyricsViews();
-                if (!isLyricsOverlayVisible && liveLyricBanner != null) {
-                    liveLyricBanner.setVisibility(View.VISIBLE);
-                }
+                refreshLyricsBannerVisibility();
                 int pos = (isBound && musicService != null) ? musicService.getCurrentPosition() : seekBar.getProgress();
                 int dur = (isBound && musicService != null) ? musicService.getDuration() : seekBar.getMax();
                 syncLyricsToPosition(pos, dur);
@@ -1154,9 +1168,7 @@ public class PlayerActivity extends AppCompatActivity {
                 if (lyricsLinesContainer != null) {
                     lyricsLinesContainer.removeAllViews();
                 }
-                if (liveLyricBanner != null) {
-                    liveLyricBanner.setVisibility(View.GONE);
-                }
+                refreshLyricsBannerVisibility();
                 if (isLyricsOverlayVisible) {
                     setLyricsOverlayVisible(false);
                 }
@@ -1209,6 +1221,28 @@ public class PlayerActivity extends AppCompatActivity {
         }
     }
 
+    private boolean shouldShowSmallLyricsByDefault() {
+        return getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(SettingsFragment.KEY_SHOW_LYRICS_BANNER_DEFAULT, false);
+    }
+
+    private void refreshLyricsBannerVisibility() {
+        if (liveLyricBanner == null) return;
+        boolean hasLyrics = currentLyricsData != null && currentLyricsData.hasLyrics();
+        boolean showBanner = hasLyrics && !isLyricsOverlayVisible
+                && (shouldShowSmallLyricsByDefault() || isSmallLyricsVisible);
+        if (showBanner) {
+            if (liveLyricBanner.getVisibility() != View.VISIBLE) {
+                liveLyricBanner.setAlpha(0f);
+                liveLyricBanner.setVisibility(View.VISIBLE);
+                liveLyricBanner.animate().alpha(1f).setDuration(160).start();
+            }
+        } else {
+            liveLyricBanner.animate().cancel();
+            liveLyricBanner.setVisibility(View.GONE);
+        }
+    }
+
     private void setLyricsOverlayVisible(boolean visible) {
         isLyricsOverlayVisible = visible;
         if (lyricsOverlayContainer != null) {
@@ -1227,9 +1261,7 @@ public class PlayerActivity extends AppCompatActivity {
                         .start();
             }
         }
-        if (liveLyricBanner != null) {
-            liveLyricBanner.setVisibility((!visible && currentLyricsData.hasLyrics()) ? View.VISIBLE : View.GONE);
-        }
+        refreshLyricsBannerVisibility();
         updateLyricsButtonState();
     }
 
@@ -1237,7 +1269,7 @@ public class PlayerActivity extends AppCompatActivity {
         if (btnLyrics == null) return;
         int accent = AccentColorHelper.getAccentColor(this);
         boolean hasLyrics = currentLyricsData != null && currentLyricsData.hasLyrics();
-        if (isLyricsOverlayVisible) {
+        if (isLyricsOverlayVisible || (hasLyrics && isSmallLyricsVisible)) {
             btnLyrics.setAlpha(1.0f);
             ImageViewCompat.setImageTintList(btnLyrics, ColorStateList.valueOf(accent));
         } else if (hasLyrics) {
@@ -1328,6 +1360,8 @@ public class PlayerActivity extends AppCompatActivity {
             getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         }
         applyAccentTheme();
+        refreshLyricsBannerVisibility();
+        updateLyricsButtonState();
 
         IntentFilter filter = new IntentFilter();
         filter.addAction(MusicService.BROADCAST_UPDATE_UI);

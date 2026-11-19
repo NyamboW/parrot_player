@@ -39,6 +39,7 @@ public class SettingsFragment extends Fragment {
     public static final String KEY_RESUME_ON_HEADSET = "resume_on_headset";
     public static final String KEY_DUCK_ON_NOTIFICATION = "duck_on_notification";
     public static final String KEY_KEEP_SCREEN_ON = "keep_screen_on";
+    public static final String KEY_SHOW_LYRICS_BANNER_DEFAULT = "show_lyrics_banner_default";
 
     private MusicService musicService;
     private boolean isBound = false;
@@ -50,13 +51,13 @@ public class SettingsFragment extends Fragment {
     private SeekBar seekBarPlaybackSpeed;
     private TextView txtCrossfadeValue;
     private SeekBar seekBarCrossfade;
-    private SwitchCompat switchSkipSilence, switchPauseOnUnplug, switchResumeOnHeadset, switchDuckOnNotification, switchKeepScreenOn;
+    private SwitchCompat switchSkipSilence, switchPauseOnUnplug, switchResumeOnHeadset, switchDuckOnNotification, switchKeepScreenOn, switchShowLyricsBanner;
     private TextView txtMusicFoldersSummary, txtAccentColorName;
     private View viewAccentSwatch;
     private TextView headerPlaybackTiming, headerAudioHeadset, headerLibraryDisplay;
     private ImageView iconSleepTimer, iconPlaybackSpeed, iconCrossfade, iconSkipSilence;
     private ImageView iconEqualizer, iconPauseUnplug, iconResumeHeadset, iconDuckOnNotification;
-    private ImageView iconAccentColor, iconMusicFolders, iconKeepScreenOn;
+    private ImageView iconAccentColor, iconMusicFolders, iconKeepScreenOn, iconShowLyricsBanner;
 
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private final Runnable sleepTimerUiUpdater = new Runnable() {
@@ -128,6 +129,7 @@ public class SettingsFragment extends Fragment {
         iconAccentColor = view.findViewById(R.id.iconAccentColor);
         iconMusicFolders = view.findViewById(R.id.iconMusicFolders);
         iconKeepScreenOn = view.findViewById(R.id.iconKeepScreenOn);
+        iconShowLyricsBanner = view.findViewById(R.id.iconShowLyricsBanner);
 
         txtSleepTimerValue = view.findViewById(R.id.txtSleepTimerValue);
         txtSleepTimerStatus = view.findViewById(R.id.txtSleepTimerStatus);
@@ -145,6 +147,7 @@ public class SettingsFragment extends Fragment {
         switchResumeOnHeadset = view.findViewById(R.id.switchResumeOnHeadset);
         switchDuckOnNotification = view.findViewById(R.id.switchDuckOnNotification);
         switchKeepScreenOn = view.findViewById(R.id.switchKeepScreenOn);
+        switchShowLyricsBanner = view.findViewById(R.id.switchShowLyricsBanner);
         txtMusicFoldersSummary = view.findViewById(R.id.txtMusicFoldersSummary);
         txtAccentColorName = view.findViewById(R.id.txtAccentColorName);
         viewAccentSwatch = view.findViewById(R.id.viewAccentSwatch);
@@ -157,6 +160,7 @@ public class SettingsFragment extends Fragment {
         View settingAccentColor = view.findViewById(R.id.setting_accent_color);
         View settingMusicFolders = view.findViewById(R.id.setting_music_folders);
         View settingKeepScreenOn = view.findViewById(R.id.setting_keep_screen_on);
+        View settingShowLyricsBanner = view.findViewById(R.id.setting_show_lyrics_banner);
 
         setupSleepTimerSlider();
         setupPlaybackSpeedSlider();
@@ -166,7 +170,8 @@ public class SettingsFragment extends Fragment {
                 settingPauseOnUnplug,
                 settingResumeOnHeadset,
                 settingDuckOnNotification,
-                settingKeepScreenOn
+                settingKeepScreenOn,
+                settingShowLyricsBanner
         );
 
         settingAccentColor.setOnClickListener(v ->
@@ -202,7 +207,7 @@ public class SettingsFragment extends Fragment {
         ImageView[] icons = new ImageView[]{
                 iconSleepTimer, iconPlaybackSpeed, iconCrossfade, iconSkipSilence,
                 iconEqualizer, iconPauseUnplug, iconResumeHeadset, iconDuckOnNotification,
-                iconAccentColor, iconMusicFolders, iconKeepScreenOn
+                iconAccentColor, iconMusicFolders, iconKeepScreenOn, iconShowLyricsBanner
         };
         for (ImageView icon : icons) {
             if (icon != null) {
@@ -223,6 +228,7 @@ public class SettingsFragment extends Fragment {
         tintSwitch(switchResumeOnHeadset, accent);
         tintSwitch(switchDuckOnNotification, accent);
         tintSwitch(switchKeepScreenOn, accent);
+        tintSwitch(switchShowLyricsBanner, accent);
 
         if (txtAccentColorName != null) {
             txtAccentColorName.setText(AccentColorHelper.getAccentName(requireContext()));
@@ -375,18 +381,23 @@ public class SettingsFragment extends Fragment {
                                      View rowPauseOnUnplug,
                                      View rowResumeOnHeadset,
                                      View rowDuckOnNotification,
-                                     View rowKeepScreenOn) {
+                                     View rowKeepScreenOn,
+                                     View rowShowLyricsBanner) {
         boolean skipSilence = prefs.getBoolean(KEY_SKIP_SILENCE, false);
         boolean pauseOnUnplug = prefs.getBoolean(KEY_PAUSE_ON_UNPLUG, true);
         boolean resumeOnHeadset = prefs.getBoolean(KEY_RESUME_ON_HEADSET, false);
         boolean duckOnNotification = prefs.getBoolean(KEY_DUCK_ON_NOTIFICATION, true);
         boolean keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, false);
+        boolean showLyricsBanner = prefs.getBoolean(KEY_SHOW_LYRICS_BANNER_DEFAULT, false);
 
         switchSkipSilence.setChecked(skipSilence);
         switchPauseOnUnplug.setChecked(pauseOnUnplug);
         switchResumeOnHeadset.setChecked(resumeOnHeadset);
         switchDuckOnNotification.setChecked(duckOnNotification);
         switchKeepScreenOn.setChecked(keepScreenOn);
+        if (switchShowLyricsBanner != null) {
+            switchShowLyricsBanner.setChecked(showLyricsBanner);
+        }
 
         View.OnClickListener skipSilenceListener = v -> {
             boolean next = (v == switchSkipSilence) ? switchSkipSilence.isChecked() : !switchSkipSilence.isChecked();
@@ -433,6 +444,18 @@ public class SettingsFragment extends Fragment {
         };
         rowKeepScreenOn.setOnClickListener(keepScreenOnListener);
         switchKeepScreenOn.setOnClickListener(keepScreenOnListener);
+
+        if (rowShowLyricsBanner != null && switchShowLyricsBanner != null) {
+            View.OnClickListener showLyricsBannerListener = v -> {
+                boolean next = (v == switchShowLyricsBanner)
+                        ? switchShowLyricsBanner.isChecked()
+                        : !switchShowLyricsBanner.isChecked();
+                switchShowLyricsBanner.setChecked(next);
+                prefs.edit().putBoolean(KEY_SHOW_LYRICS_BANNER_DEFAULT, next).apply();
+            };
+            rowShowLyricsBanner.setOnClickListener(showLyricsBannerListener);
+            switchShowLyricsBanner.setOnClickListener(showLyricsBannerListener);
+        }
     }
 
     private void updateMusicFoldersSummary() {
