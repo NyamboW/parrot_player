@@ -471,6 +471,8 @@ public class FavFragment extends Fragment {
                             } else if (item.getItemId() == R.id.action_add_to_playlist) {
                                 showAddToPlaylistDialog(path);
                                 return true;
+                            } else if (SongMenuActionsHelper.handleCommonMenuAction(requireContext(), item.getItemId(), path)) {
+                                return true;
                             }
                             return false;
                         });

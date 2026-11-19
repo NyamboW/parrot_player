@@ -837,6 +837,8 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
                             } else if (item.getItemId() == R.id.action_add_to_playlist) {
                                 showAddToPlaylistDialog(path);
                                 return true;
+                            } else if (SongMenuActionsHelper.handleCommonMenuAction(GroupSongsActivity.this, item.getItemId(), path)) {
+                                return true;
                             } else if (item.getItemId() == R.id.action_delete) {
                                 if ("playlist".equals(groupType)) {
                                     PlaylistManager pm = new PlaylistManager(GroupSongsActivity.this);
