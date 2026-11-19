@@ -42,6 +42,7 @@ import androidx.fragment.app.Fragment;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import android.widget.AbsListView;
+import android.widget.SectionIndexer;
 import android.view.ActionMode;
 import android.util.SparseBooleanArray;
 import android.app.AlertDialog;
@@ -69,7 +70,18 @@ public class Music_Fragment extends Fragment {
     
     // Maintain current search query to apply when loading songs
     String currentQuery = "";
-    
+
+    private static final String KEY_TRACKS_SORT_MODE = "tracks_sort_mode";
+    private static final String[] SORT_LABELS = new String[]{
+            "Date Added (Newest First)",
+            "Date Added (Oldest First)",
+            "Title (A – Z)",
+            "Title (Z – A)",
+            "Artist (A – Z)",
+            "Duration (Longest First)",
+            "Duration (Shortest First)"
+    };
+    private int currentSortMode = 0;
     String currentSortOrder = MediaStore.Audio.Media.DATE_ADDED + " DESC";
     private BaseAdapter songsAdapter;
     private boolean isMultiSelectMode = false;
@@ -117,7 +129,11 @@ public class Music_Fragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_music_, container, false);
 
         listView = view.findViewById(R.id.listView);
+        listView.setFastScrollEnabled(true);
         favManager = new FavouritesManager(requireContext());
+        SharedPreferences prefs = requireContext().getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE);
+        currentSortMode = prefs.getInt(KEY_TRACKS_SORT_MODE, 0);
+        updateSortOrderFromMode();
         
         setupMultiSelect();
         
@@ -332,8 +348,31 @@ public class Music_Fragment extends Fragment {
         for (int i = 0; i < songList.size(); i++) {
             String fullPath = songList.get(i);
             String name = fullPath.substring(fullPath.lastIndexOf("/") + 1);
-            items[i] = name.replace(".mp3", "").replace(".wav", "");
+            items[i] = name.replaceAll("(?i)\\.(mp3|wav|m4a|flac|ogg|aac)$", "");
             artists[i] = artistList.get(i);
+        }
+
+        // If sorting by display title (A-Z or Z-A), sort by the cleaned display name
+        if (currentSortMode == 2 || currentSortMode == 3) {
+            ArrayList<Integer> indices = new ArrayList<>(songList.size());
+            for (int i = 0; i < songList.size(); i++) indices.add(i);
+            final boolean desc = (currentSortMode == 3);
+            java.util.Collections.sort(indices, (a, b) -> {
+                int cmp = items[a].compareToIgnoreCase(items[b]);
+                return desc ? -cmp : cmp;
+            });
+            ArrayList<String> sortedPaths = new ArrayList<>(songList.size());
+            String[] sortedItems = new String[songList.size()];
+            String[] sortedArtists = new String[songList.size()];
+            for (int i = 0; i < indices.size(); i++) {
+                int idx = indices.get(i);
+                sortedPaths.add(songList.get(idx));
+                sortedItems[i] = items[idx];
+                sortedArtists[i] = artists[idx];
+            }
+            songList = sortedPaths;
+            items = sortedItems;
+            artists = sortedArtists;
         }
         
         // Apply current search filter
@@ -377,8 +416,26 @@ public class Music_Fragment extends Fragment {
         setAdapter();
     }
     
+    private abstract static class IndexedBaseAdapter extends BaseAdapter implements SectionIndexer {}
+
     private void setAdapter() {
-        songsAdapter = new BaseAdapter() {
+        final AlphabetSectionIndexer indexer = new AlphabetSectionIndexer(filteredItems);
+        songsAdapter = new IndexedBaseAdapter() {
+
+            @Override
+            public Object[] getSections() {
+                return indexer.getSections();
+            }
+
+            @Override
+            public int getPositionForSection(int sectionIndex) {
+                return indexer.getPositionForSection(sectionIndex);
+            }
+
+            @Override
+            public int getSectionForPosition(int position) {
+                return indexer.getSectionForPosition(position);
+            }
 
             @Override
             public int getCount() {
@@ -596,6 +653,61 @@ public class Music_Fragment extends Fragment {
             }
         }
         super.onCreateOptionsMenu(menu, inflater);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == R.id.item_sort) {
+            showSortDialog();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void updateSortOrderFromMode() {
+        switch (currentSortMode) {
+            case 1:
+                currentSortOrder = MediaStore.Audio.Media.DATE_ADDED + " ASC";
+                break;
+            case 2:
+                currentSortOrder = MediaStore.Audio.Media.TITLE + " COLLATE NOCASE ASC";
+                break;
+            case 3:
+                currentSortOrder = MediaStore.Audio.Media.TITLE + " COLLATE NOCASE DESC";
+                break;
+            case 4:
+                currentSortOrder = MediaStore.Audio.Media.ARTIST + " COLLATE NOCASE ASC, "
+                        + MediaStore.Audio.Media.TITLE + " COLLATE NOCASE ASC";
+                break;
+            case 5:
+                currentSortOrder = MediaStore.Audio.Media.DURATION + " DESC";
+                break;
+            case 6:
+                currentSortOrder = MediaStore.Audio.Media.DURATION + " ASC";
+                break;
+            case 0:
+            default:
+                currentSortOrder = MediaStore.Audio.Media.DATE_ADDED + " DESC";
+                break;
+        }
+    }
+
+    private void showSortDialog() {
+        if (!isAdded()) return;
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Sort Tracks By")
+                .setSingleChoiceItems(SORT_LABELS, currentSortMode, (dialog, which) -> {
+                    currentSortMode = which;
+                    requireContext().getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE)
+                            .edit()
+                            .putInt(KEY_TRACKS_SORT_MODE, currentSortMode)
+                            .apply();
+                    updateSortOrderFromMode();
+                    loadSongs();
+                    dialog.dismiss();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void hideKeyboard(View anchor) {

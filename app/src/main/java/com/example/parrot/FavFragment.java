@@ -39,6 +39,7 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 
 import android.widget.AbsListView;
+import android.widget.SectionIndexer;
 import android.view.ActionMode;
 import android.util.SparseBooleanArray;
 import android.app.AlertDialog;
@@ -85,7 +86,14 @@ public class FavFragment extends Fragment {
     private ExecutorService executorService;
     private HashMap<String, String> artistCache = new HashMap<>();
 
-    private int currentFavSortMode = 0; // 0: Date, 1: A-Z, 2: Folder
+    private static final String KEY_FAV_SORT_MODE = "fav_sort_mode";
+    private static final String[] FAV_SORT_LABELS = new String[]{
+            "Date Added (Newest First)",
+            "Title (A – Z)",
+            "Title (Z – A)",
+            "Folder Path (A – Z)"
+    };
+    private int currentFavSortMode = 0; // 0: Date, 1: A-Z, 2: Z-A, 3: Folder
     
     // Search
     private ArrayList<String> filteredFavSongs = new ArrayList<>();
@@ -109,7 +117,11 @@ public class FavFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_fav, container, false);
 
         favListView = view.findViewById(R.id.favListView);
+        favListView.setFastScrollEnabled(true);
         txtEmpty = view.findViewById(R.id.txtEmpty);
+        currentFavSortMode = requireContext()
+                .getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE)
+                .getInt(KEY_FAV_SORT_MODE, 0);
         
         // Search views removed from layout, handled via OptionsMenu
         
@@ -272,11 +284,12 @@ public class FavFragment extends Fragment {
         Collections.sort(favSongs, new Comparator<String>() {
             @Override
             public int compare(String path1, String path2) {
-                if (currentFavSortMode == 1) { // A-Z
+                if (currentFavSortMode == 1 || currentFavSortMode == 2) { // A-Z or Z-A
                     String name1 = path1.substring(path1.lastIndexOf("/") + 1).toLowerCase();
                     String name2 = path2.substring(path2.lastIndexOf("/") + 1).toLowerCase();
-                    return name1.compareTo(name2);
-                } else if (currentFavSortMode == 2) { // By Folder
+                    int cmp = name1.compareTo(name2);
+                    return currentFavSortMode == 2 ? -cmp : cmp;
+                } else if (currentFavSortMode == 3) { // By Folder
                     return path1.compareToIgnoreCase(path2);
                 } else { // Date Added
                     long time1 = new File(path1).lastModified();
@@ -354,8 +367,26 @@ public class FavFragment extends Fragment {
         }
     }
     
+    private abstract static class IndexedFavAdapter extends BaseAdapter implements SectionIndexer {}
+
     private void setFavAdapter() {
-        adapter = new BaseAdapter() {
+        final AlphabetSectionIndexer indexer = new AlphabetSectionIndexer(filteredDisplayNames);
+        adapter = new IndexedFavAdapter() {
+            @Override
+            public Object[] getSections() {
+                return indexer.getSections();
+            }
+
+            @Override
+            public int getPositionForSection(int sectionIndex) {
+                return indexer.getPositionForSection(sectionIndex);
+            }
+
+            @Override
+            public int getSectionForPosition(int position) {
+                return indexer.getSectionForPosition(position);
+            }
+
             @Override
             public int getCount() {
                 return filteredDisplayNames.length;
@@ -600,6 +631,32 @@ public class FavFragment extends Fragment {
             }
         }
         super.onCreateOptionsMenu(menu, inflater);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == R.id.item_sort) {
+            showFavSortDialog();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void showFavSortDialog() {
+        if (!isAdded()) return;
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Sort Favourites By")
+                .setSingleChoiceItems(FAV_SORT_LABELS, currentFavSortMode, (dialog, which) -> {
+                    currentFavSortMode = which;
+                    requireContext().getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE)
+                            .edit()
+                            .putInt(KEY_FAV_SORT_MODE, currentFavSortMode)
+                            .apply();
+                    loadFavourites();
+                    dialog.dismiss();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void hideKeyboard(View anchor) {

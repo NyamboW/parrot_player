@@ -27,6 +27,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.PopupMenu;
+import android.widget.SectionIndexer;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -108,6 +109,7 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
         }
 
         listView = findViewById(R.id.listViewGroupSongs);
+        listView.setFastScrollEnabled(true);
         layoutPlaylistTopActions = findViewById(R.id.layoutPlaylistTopActions);
         layoutPlaylistEmpty = findViewById(R.id.layoutPlaylistEmpty);
         btnTopImportFolder = findViewById(R.id.btnTopImportFolder);
@@ -732,8 +734,17 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
                 .show();
     }
 
+    private abstract static class IndexedGroupAdapter extends BaseAdapter implements SectionIndexer {}
+
     private void setAdapter() {
-        songsAdapter = new BaseAdapter() {
+        final AlphabetSectionIndexer indexer = new AlphabetSectionIndexer(items);
+        songsAdapter = new IndexedGroupAdapter() {
+            @Override
+            public Object[] getSections() { return indexer.getSections(); }
+            @Override
+            public int getPositionForSection(int sectionIndex) { return indexer.getPositionForSection(sectionIndex); }
+            @Override
+            public int getSectionForPosition(int position) { return indexer.getSectionForPosition(position); }
             @Override
             public int getCount() { return items.length; }
             @Override
