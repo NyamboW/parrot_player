@@ -37,6 +37,7 @@ public class SettingsFragment extends Fragment {
     public static final String KEY_SKIP_SILENCE = "skip_silence";
     public static final String KEY_PAUSE_ON_UNPLUG = "pause_on_unplug";
     public static final String KEY_RESUME_ON_HEADSET = "resume_on_headset";
+    public static final String KEY_DUCK_ON_NOTIFICATION = "duck_on_notification";
     public static final String KEY_KEEP_SCREEN_ON = "keep_screen_on";
 
     private MusicService musicService;
@@ -49,12 +50,12 @@ public class SettingsFragment extends Fragment {
     private SeekBar seekBarPlaybackSpeed;
     private TextView txtCrossfadeValue;
     private SeekBar seekBarCrossfade;
-    private SwitchCompat switchSkipSilence, switchPauseOnUnplug, switchResumeOnHeadset, switchKeepScreenOn;
+    private SwitchCompat switchSkipSilence, switchPauseOnUnplug, switchResumeOnHeadset, switchDuckOnNotification, switchKeepScreenOn;
     private TextView txtMusicFoldersSummary, txtAccentColorName;
     private View viewAccentSwatch;
     private TextView headerPlaybackTiming, headerAudioHeadset, headerLibraryDisplay;
     private ImageView iconSleepTimer, iconPlaybackSpeed, iconCrossfade, iconSkipSilence;
-    private ImageView iconEqualizer, iconPauseUnplug, iconResumeHeadset;
+    private ImageView iconEqualizer, iconPauseUnplug, iconResumeHeadset, iconDuckOnNotification;
     private ImageView iconAccentColor, iconMusicFolders, iconKeepScreenOn;
 
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
@@ -123,6 +124,7 @@ public class SettingsFragment extends Fragment {
         iconEqualizer = view.findViewById(R.id.iconEqualizer);
         iconPauseUnplug = view.findViewById(R.id.iconPauseUnplug);
         iconResumeHeadset = view.findViewById(R.id.iconResumeHeadset);
+        iconDuckOnNotification = view.findViewById(R.id.iconDuckOnNotification);
         iconAccentColor = view.findViewById(R.id.iconAccentColor);
         iconMusicFolders = view.findViewById(R.id.iconMusicFolders);
         iconKeepScreenOn = view.findViewById(R.id.iconKeepScreenOn);
@@ -141,6 +143,7 @@ public class SettingsFragment extends Fragment {
         switchSkipSilence = view.findViewById(R.id.switchSkipSilence);
         switchPauseOnUnplug = view.findViewById(R.id.switchPauseOnUnplug);
         switchResumeOnHeadset = view.findViewById(R.id.switchResumeOnHeadset);
+        switchDuckOnNotification = view.findViewById(R.id.switchDuckOnNotification);
         switchKeepScreenOn = view.findViewById(R.id.switchKeepScreenOn);
         txtMusicFoldersSummary = view.findViewById(R.id.txtMusicFoldersSummary);
         txtAccentColorName = view.findViewById(R.id.txtAccentColorName);
@@ -150,6 +153,7 @@ public class SettingsFragment extends Fragment {
         View settingEqualizer = view.findViewById(R.id.setting_equalizer);
         View settingPauseOnUnplug = view.findViewById(R.id.setting_pause_on_unplug);
         View settingResumeOnHeadset = view.findViewById(R.id.setting_resume_on_headset);
+        View settingDuckOnNotification = view.findViewById(R.id.setting_duck_on_notification);
         View settingAccentColor = view.findViewById(R.id.setting_accent_color);
         View settingMusicFolders = view.findViewById(R.id.setting_music_folders);
         View settingKeepScreenOn = view.findViewById(R.id.setting_keep_screen_on);
@@ -161,6 +165,7 @@ public class SettingsFragment extends Fragment {
                 settingSkipSilence,
                 settingPauseOnUnplug,
                 settingResumeOnHeadset,
+                settingDuckOnNotification,
                 settingKeepScreenOn
         );
 
@@ -196,7 +201,7 @@ public class SettingsFragment extends Fragment {
 
         ImageView[] icons = new ImageView[]{
                 iconSleepTimer, iconPlaybackSpeed, iconCrossfade, iconSkipSilence,
-                iconEqualizer, iconPauseUnplug, iconResumeHeadset,
+                iconEqualizer, iconPauseUnplug, iconResumeHeadset, iconDuckOnNotification,
                 iconAccentColor, iconMusicFolders, iconKeepScreenOn
         };
         for (ImageView icon : icons) {
@@ -216,6 +221,7 @@ public class SettingsFragment extends Fragment {
         tintSwitch(switchSkipSilence, accent);
         tintSwitch(switchPauseOnUnplug, accent);
         tintSwitch(switchResumeOnHeadset, accent);
+        tintSwitch(switchDuckOnNotification, accent);
         tintSwitch(switchKeepScreenOn, accent);
 
         if (txtAccentColorName != null) {
@@ -368,15 +374,18 @@ public class SettingsFragment extends Fragment {
     private void setupToggleSwitches(View rowSkipSilence,
                                      View rowPauseOnUnplug,
                                      View rowResumeOnHeadset,
+                                     View rowDuckOnNotification,
                                      View rowKeepScreenOn) {
         boolean skipSilence = prefs.getBoolean(KEY_SKIP_SILENCE, false);
         boolean pauseOnUnplug = prefs.getBoolean(KEY_PAUSE_ON_UNPLUG, true);
         boolean resumeOnHeadset = prefs.getBoolean(KEY_RESUME_ON_HEADSET, false);
+        boolean duckOnNotification = prefs.getBoolean(KEY_DUCK_ON_NOTIFICATION, true);
         boolean keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, false);
 
         switchSkipSilence.setChecked(skipSilence);
         switchPauseOnUnplug.setChecked(pauseOnUnplug);
         switchResumeOnHeadset.setChecked(resumeOnHeadset);
+        switchDuckOnNotification.setChecked(duckOnNotification);
         switchKeepScreenOn.setChecked(keepScreenOn);
 
         View.OnClickListener skipSilenceListener = v -> {
@@ -405,6 +414,17 @@ public class SettingsFragment extends Fragment {
         };
         rowResumeOnHeadset.setOnClickListener(resumeHeadsetListener);
         switchResumeOnHeadset.setOnClickListener(resumeHeadsetListener);
+
+        View.OnClickListener duckNotificationListener = v -> {
+            boolean next = (v == switchDuckOnNotification) ? switchDuckOnNotification.isChecked() : !switchDuckOnNotification.isChecked();
+            switchDuckOnNotification.setChecked(next);
+            prefs.edit().putBoolean(KEY_DUCK_ON_NOTIFICATION, next).apply();
+            if (isBound && musicService != null) {
+                musicService.refreshAudioFocusPreference();
+            }
+        };
+        rowDuckOnNotification.setOnClickListener(duckNotificationListener);
+        switchDuckOnNotification.setOnClickListener(duckNotificationListener);
 
         View.OnClickListener keepScreenOnListener = v -> {
             boolean next = (v == switchKeepScreenOn) ? switchKeepScreenOn.isChecked() : !switchKeepScreenOn.isChecked();

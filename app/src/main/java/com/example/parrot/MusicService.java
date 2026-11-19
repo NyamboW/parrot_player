@@ -1,6 +1,7 @@
 package com.example.parrot;
 
 import android.app.Notification;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
@@ -59,6 +60,7 @@ public class MusicService extends Service {
     public static final String ACTION_REQUEST_UPDATE = "ACTION_REQUEST_UPDATE";
     public static final String ACTION_RELOAD_EQUALIZER = "ACTION_RELOAD_EQUALIZER";
     public static final String ACTION_CLOSE = "ACTION_CLOSE";
+    public static final String ACTION_DISMISS_NOTIFICATION = "ACTION_DISMISS_NOTIFICATION";
     public static final String ACTION_ADD_TO_QUEUE = "ACTION_ADD_TO_QUEUE";
     public static final String ACTION_ADD_MULTIPLE_TO_QUEUE = "ACTION_ADD_MULTIPLE_TO_QUEUE";
     public static final String ACTION_PLAY_NEXT = "ACTION_PLAY_NEXT";
@@ -127,6 +129,7 @@ public class MusicService extends Service {
     private AudioDeviceCallback audioDeviceCallback;
     private boolean audioDeviceCallbackReady = false;
     private long lastAutoResumeElapsedMs = 0L;
+    private boolean pausedByAudioFocus = false;
 
     private static final long STATE_SAVE_INTERVAL_MS = 3000L;
     private static final long TRANSITION_POLL_INTERVAL_MS = 250L;
@@ -199,20 +202,27 @@ public class MusicService extends Service {
             @Override
             public void onAudioFocusChange(int focusChange) {
                 if (mediaPlayer == null || !isPrepared) return;
-                
+
                 switch (focusChange) {
                     case AudioManager.AUDIOFOCUS_GAIN:
-                        if (!mediaPlayer.isPlaying()) {
+                        boolean shouldResume = pausedByAudioFocus;
+                        pausedByAudioFocus = false;
+                        if (shouldResume && !mediaPlayer.isPlaying()) {
+                            mediaPlayer.setVolume(1.0f, 1.0f);
                             mediaPlayer.start();
                             applyPlaybackSpeed();
                             startPeriodicStateSave();
                             updateMediaSession();
                             showNotification(R.drawable.ic_pause);
                             broadcastUIUpdate();
+                        } else {
+                            try {
+                                mediaPlayer.setVolume(1.0f, 1.0f);
+                            } catch (Exception ignored) {}
                         }
-                        mediaPlayer.setVolume(1.0f, 1.0f);
                         break;
                     case AudioManager.AUDIOFOCUS_LOSS:
+                        pausedByAudioFocus = false;
                         if (mediaPlayer.isPlaying()) {
                             mediaPlayer.pause();
                             stopPeriodicStateSave();
@@ -224,6 +234,7 @@ public class MusicService extends Service {
                         break;
                     case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
                         if (mediaPlayer.isPlaying()) {
+                            pausedByAudioFocus = true;
                             mediaPlayer.pause();
                             stopPeriodicStateSave();
                             saveCurrentState(false);
@@ -234,16 +245,27 @@ public class MusicService extends Service {
                         break;
                     case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
                         if (mediaPlayer.isPlaying()) {
-                            mediaPlayer.setVolume(0.1f, 0.1f);
+                            boolean duckOnNotification = getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE)
+                                    .getBoolean(SettingsFragment.KEY_DUCK_ON_NOTIFICATION, true);
+                            if (duckOnNotification) {
+                                pausedByAudioFocus = false;
+                                mediaPlayer.setVolume(0.2f, 0.2f);
+                            } else {
+                                pausedByAudioFocus = true;
+                                mediaPlayer.pause();
+                                stopPeriodicStateSave();
+                                saveCurrentState(false);
+                                updateMediaSession();
+                                showNotification(R.drawable.ic_play);
+                                broadcastUIUpdate();
+                            }
                         }
                         break;
                 }
             }
         };
-        
-        audioFocusRequest = new AudioFocusRequestCompat.Builder(AudioManagerCompat.AUDIOFOCUS_GAIN)
-                .setOnAudioFocusChangeListener(audioFocusChangeListener)
-                .build();
+
+        audioFocusRequest = buildAudioFocusRequest();
                 
         mediaSession = new MediaSessionCompat(this, "MusicService");
         mediaSession.setCallback(new MediaSessionCompat.Callback() {
@@ -369,6 +391,9 @@ public class MusicService extends Service {
                 case ACTION_CLOSE:
                     closePlayerService();
                     break;
+                case ACTION_DISMISS_NOTIFICATION:
+                    dismissNotificationAndStopService();
+                    break;
             }
         }
         return START_NOT_STICKY;
@@ -389,6 +414,7 @@ public class MusicService extends Service {
         safeRelease();
         final int token = ++playToken;
         isPrepared = false;
+        pausedByAudioFocus = false;
         crossfadeTriggered = false;
         if (repeatMode != REPEAT_ONE) {
             abLoopStartMs = -1;
@@ -645,6 +671,7 @@ public class MusicService extends Service {
         final int newToken = ++playToken;
         mediaPlayer = promotedMp;
         isPrepared = true;
+        pausedByAudioFocus = false;
         crossfadeTriggered = false;
         incomingFadeIn = false;
         restoredSeekPosition = 0;
@@ -781,6 +808,7 @@ public class MusicService extends Service {
     }
 
     public void togglePlay() {
+        pausedByAudioFocus = false;
         if (mediaPlayer == null) {
             if (!mySongs.isEmpty() && position >= 0 && position < mySongs.size()) {
                 startPlayback(mySongs.get(position), restoredSeekPosition);
@@ -941,6 +969,7 @@ public class MusicService extends Service {
 
     private void safeRelease() {
         releaseGaplessNextPlayer();
+        pausedByAudioFocus = false;
         playToken++;
         boolean wasPrepared = isPrepared;
         isPrepared = false;
@@ -987,16 +1016,22 @@ public class MusicService extends Service {
         Intent closeIntent = new Intent(this, MusicService.class).setAction(ACTION_CLOSE);
         PendingIntent closePendingIntent = PendingIntent.getService(this, 0, closeIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
+        Intent dismissIntent = new Intent(this, MusicService.class).setAction(ACTION_DISMISS_NOTIFICATION);
+        PendingIntent dismissPendingIntent = PendingIntent.getService(this, 10, dismissIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
         Intent intent = new Intent(this, PlayerActivity.class);
         PendingIntent contentIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Bitmap icon = AlbumArtLoader.getInstance().getBestCachedArt(songPath);
+        boolean isPlayingState = (playPauseBtn == R.drawable.ic_pause);
+        String subText = String.format(Locale.US, "%d/%d", getPlayOrderNumber(), mySongs.size());
 
         Notification notification = new NotificationCompat.Builder(this, ApplicationClass.CHANNEL_ID_1)
                 .setSmallIcon(R.drawable.ic_music)
                 .setLargeIcon(icon)
                 .setContentTitle(songName)
                 .setContentText(contentText)
+                .setSubText(subText)
                 .addAction(R.drawable.ic_previous, "Previous", prevPendingIntent)
                 .addAction(playPauseBtn, "Play", playPendingIntent)
                 .addAction(R.drawable.ic_next, "Next", nextPendingIntent)
@@ -1008,11 +1043,31 @@ public class MusicService extends Service {
                         .setCancelButtonIntent(closePendingIntent))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(contentIntent)
+                .setDeleteIntent(dismissPendingIntent)
+                .setOngoing(isPlayingState)
                 .setOnlyAlertOnce(true)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .build();
 
-        startForeground(1, notification);
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (isPlayingState || pausedByAudioFocus) {
+            try {
+                startForeground(1, notification);
+            } catch (Exception e) {
+                if (nm != null) {
+                    nm.notify(1, notification);
+                }
+            }
+        } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_DETACH);
+            } else {
+                stopForeground(false);
+            }
+            if (nm != null) {
+                nm.notify(1, notification);
+            }
+        }
     }
     
     private void broadcastUIUpdate() {
@@ -1754,7 +1809,46 @@ public class MusicService extends Service {
         return false;
     }
 
+    private AudioFocusRequestCompat buildAudioFocusRequest() {
+        boolean duckOnNotification = getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(SettingsFragment.KEY_DUCK_ON_NOTIFICATION, true);
+        return new AudioFocusRequestCompat.Builder(AudioManagerCompat.AUDIOFOCUS_GAIN)
+                .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                .setWillPauseWhenDucked(!duckOnNotification)
+                .build();
+    }
+
+    public void refreshAudioFocusPreference() {
+        audioFocusRequest = buildAudioFocusRequest();
+    }
+
+    private void dismissNotificationAndStopService() {
+        pausedByAudioFocus = false;
+        activeIsPlaying = false;
+        stopPeriodicStateSave();
+        stateHandler.removeCallbacks(sleepTimerRunnable);
+        if (mediaPlayer != null && isPrepared) {
+            try {
+                if (mediaPlayer.isPlaying()) {
+                    mediaPlayer.pause();
+                }
+            } catch (Exception ignored) {}
+            updateMediaSession();
+        }
+        saveCurrentState(true);
+        releaseFadingOutPlayer();
+        safeRelease();
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) {
+            nm.cancel(1);
+        }
+        stopForeground(true);
+        broadcastUIUpdate();
+        stopSelf();
+    }
+
     private void closePlayerService() {
+        pausedByAudioFocus = false;
         activeIsPlaying = false;
         stopPeriodicStateSave();
         stateHandler.removeCallbacks(sleepTimerRunnable);

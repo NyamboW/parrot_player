@@ -424,7 +424,7 @@
             android:id="@+id/setting_resume_on_headset"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="10dp"
             android:background="@drawable/card_surface_bg"
             android:clickable="true"
             android:focusable="true"
@@ -466,6 +466,57 @@
 
             <androidx.appcompat.widget.SwitchCompat
                 android:id="@+id/switchResumeOnHeadset"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <!-- Duck Volume on Notifications -->
+        <LinearLayout
+            android:id="@+id/setting_duck_on_notification"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/card_surface_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="14dp">
+
+            <ImageView
+                android:id="@+id/iconDuckOnNotification"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:src="@drawable/ic_volume_down"
+                app:tint="#4CAF50" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="Duck Volume on Alerts"
+                    android:textColor="#F5F7FA"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Lower volume for alerts; turn off to pause &amp; auto-resume cleanly"
+                    android:textColor="#9AA3B2"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switchDuckOnNotification"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
         </LinearLayout>
