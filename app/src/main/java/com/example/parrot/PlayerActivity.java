@@ -12,6 +12,7 @@ import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -43,6 +44,8 @@ import androidx.cardview.widget.CardView;
 import androidx.core.widget.ImageViewCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
+
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -336,7 +339,7 @@ public class PlayerActivity extends AppCompatActivity {
         if (btnTimerSpeed != null) {
             btnTimerSpeed.setOnClickListener(v -> {
                 popView(btnTimerSpeed);
-                showQuickTimerSpeedDialog();
+                showQuickTimerSpeedBottomSheet();
             });
         }
 
@@ -871,55 +874,120 @@ public class PlayerActivity extends AppCompatActivity {
         return s + "×";
     }
 
-    private void showQuickTimerSpeedDialog() {
+    private void showQuickTimerSpeedBottomSheet() {
         final float density = getResources().getDisplayMetrics().density;
         final int accent = AccentColorHelper.getAccentColor(this);
 
+        final BottomSheetDialog sheet = new BottomSheetDialog(this);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.parseColor("#141821"));
-        int outerPad = (int) (20 * density);
-        root.setPadding(outerPad, (int) (18 * density), outerPad, (int) (12 * density));
+        float r = 22f * density;
+        GradientDrawable sheetBg = new GradientDrawable();
+        sheetBg.setColor(Color.parseColor("#0F1219"));
+        sheetBg.setCornerRadii(new float[]{r, r, r, r, 0f, 0f, 0f, 0f});
+        root.setBackground(sheetBg);
+        int sidePad = (int) (20 * density);
+        root.setPadding(sidePad, (int) (12 * density), sidePad, (int) (24 * density));
 
-        long remainingMs = (isBound && musicService != null) ? musicService.getSleepTimerRemainingMs() : 0L;
+        // Top drag handle pill
+        View dragHandle = new View(this);
+        GradientDrawable handleBg = new GradientDrawable();
+        handleBg.setColor(Color.parseColor("#2A303D"));
+        handleBg.setCornerRadius(2f * density);
+        dragHandle.setBackground(handleBg);
+        LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(
+                (int) (38 * density), (int) (4 * density));
+        handleLp.gravity = Gravity.CENTER_HORIZONTAL;
+        handleLp.bottomMargin = (int) (14 * density);
+        dragHandle.setLayoutParams(handleLp);
+        root.addView(dragHandle);
+
+        // Header
+        TextView titleView = new TextView(this);
+        titleView.setText("Timer & Speed");
+        titleView.setTextColor(Color.parseColor("#F5F7FA"));
+        titleView.setTextSize(18f);
+        titleView.setTypeface(null, Typeface.BOLD);
+        root.addView(titleView);
+
+        TextView subtitleView = new TextView(this);
+        subtitleView.setTextColor(Color.parseColor("#8A93A2"));
+        subtitleView.setTextSize(12.5f);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = (int) (2 * density);
+        subLp.bottomMargin = (int) (18 * density);
+        subtitleView.setLayoutParams(subLp);
+        root.addView(subtitleView);
+
+        // Sleep Timer section
         TextView timerHeader = new TextView(this);
-        timerHeader.setText(remainingMs > 0L
-                ? "SLEEP TIMER  •  " + formatTime((int) remainingMs) + " left"
-                : "SLEEP TIMER");
         timerHeader.setTextColor(accent);
-        timerHeader.setTextSize(11.5f);
+        timerHeader.setTextSize(11f);
         timerHeader.setLetterSpacing(0.08f);
         timerHeader.setTypeface(null, Typeface.BOLD);
         root.addView(timerHeader);
 
-        final android.app.AlertDialog[] dialogHolder = new android.app.AlertDialog[1];
+        final int[] timerMinutes = new int[]{0, 15, 30, 45, 60, 90};
+        final String[] timerLabels = new String[]{"Off", "15m", "30m", "45m", "60m", "90m"};
+        final TextView[] timerChips = new TextView[timerMinutes.length];
 
-        int[] timerMinutes = new int[]{0, 15, 30, 45, 60, 90};
-        String[] timerLabels = new String[]{"Off", "15m", "30m", "45m", "60m", "90m"};
+        Runnable refreshSheetStatus = () -> {
+            long remMs = (isBound && musicService != null) ? musicService.getSleepTimerRemainingMs() : 0L;
+            float spd = getActivePlaybackSpeed();
+            if (remMs > 0L) {
+                timerHeader.setText("SLEEP TIMER  •  " + formatTime((int) Math.min(Integer.MAX_VALUE, remMs)) + " LEFT");
+                subtitleView.setText("Stops playback in " + formatTime((int) Math.min(Integer.MAX_VALUE, remMs))
+                        + " • " + formatSpeedChip(spd) + " speed");
+            } else {
+                timerHeader.setText("SLEEP TIMER");
+                subtitleView.setText(Math.abs(spd - 1.0f) >= 0.04f
+                        ? "Playing at " + formatSpeedChip(spd) + " speed"
+                        : "Auto-pause gently or adjust playback speed");
+            }
+            if (timerChips[0] != null && remMs <= 0L) {
+                for (int k = 0; k < timerChips.length; k++) {
+                    if (timerChips[k] != null) styleOptionChip(timerChips[k], k == 0, accent, density);
+                }
+            }
+        };
+
+        long initialRemMs = (isBound && musicService != null) ? musicService.getSleepTimerRemainingMs() : 0L;
         addChipGrid(root, density, 3, timerLabels.length, index -> {
             final int mins = timerMinutes[index];
-            boolean isSelected = (mins == 0 && remainingMs <= 0L);
-            return buildOptionChip(timerLabels[index], isSelected, accent, density, v -> {
+            boolean isSelected = (mins == 0 && initialRemMs <= 0L);
+            TextView chip = buildOptionChip(timerLabels[index], isSelected, accent, density, v -> {
                 if (isBound && musicService != null) {
                     musicService.setSleepTimerMinutes(mins);
                 }
+                for (int k = 0; k < timerChips.length; k++) {
+                    if (timerChips[k] != null) {
+                        styleOptionChip(timerChips[k], k == index, accent, density);
+                    }
+                }
                 lastTimerSpeedActive = !lastTimerSpeedActive;
                 updateTimerSpeedBadge();
-                Toast.makeText(this, mins == 0 ? "Sleep timer cancelled" : "Sleep timer set for " + mins + " min", Toast.LENGTH_SHORT).show();
-                if (dialogHolder[0] != null) dialogHolder[0].dismiss();
+                refreshSheetStatus.run();
+                Toast.makeText(this,
+                        mins == 0 ? "Sleep timer cancelled" : "Sleep timer set for " + mins + " min",
+                        Toast.LENGTH_SHORT).show();
             });
+            timerChips[index] = chip;
+            return chip;
         });
 
+        // Playback Speed section
         TextView speedHeader = new TextView(this);
         float currentSpeed = getActivePlaybackSpeed();
         speedHeader.setText("PLAYBACK SPEED  •  " + formatSpeedChip(currentSpeed));
         speedHeader.setTextColor(accent);
-        speedHeader.setTextSize(11.5f);
+        speedHeader.setTextSize(11f);
         speedHeader.setLetterSpacing(0.08f);
         speedHeader.setTypeface(null, Typeface.BOLD);
         LinearLayout.LayoutParams shParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        shParams.topMargin = (int) (18 * density);
+        shParams.topMargin = (int) (20 * density);
         speedHeader.setLayoutParams(shParams);
         root.addView(speedHeader);
 
@@ -944,17 +1012,33 @@ public class PlayerActivity extends AppCompatActivity {
                 }
                 lastTimerSpeedActive = !lastTimerSpeedActive;
                 updateTimerSpeedBadge();
+                refreshSheetStatus.run();
             });
             speedChips[index] = chip;
             return chip;
         });
 
-        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
-                .setView(root)
-                .setPositiveButton("Done", null)
-                .create();
-        dialogHolder[0] = dialog;
-        dialog.show();
+        refreshSheetStatus.run();
+
+        final Runnable sheetTicker = new Runnable() {
+            @Override
+            public void run() {
+                if (!sheet.isShowing() || isFinishing() || isDestroyed()) return;
+                refreshSheetStatus.run();
+                handler.postDelayed(this, 500L);
+            }
+        };
+
+        sheet.setContentView(root);
+        sheet.setOnShowListener(dialogInterface -> {
+            View bottomSheetInternal = sheet.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+            if (bottomSheetInternal != null) {
+                bottomSheetInternal.setBackgroundColor(Color.TRANSPARENT);
+            }
+            handler.postDelayed(sheetTicker, 500L);
+        });
+        sheet.setOnDismissListener(dialogInterface -> handler.removeCallbacks(sheetTicker));
+        sheet.show();
     }
 
     private interface ChipFactory {
