@@ -92,6 +92,7 @@ public class MusicService extends Service {
     private int playToken = 0;
     private ArrayList<String> mySongs = new ArrayList<>();
     private int position = 0;
+    private int sessionTrackOrder = 1;
     private final ArrayList<Integer> shuffleOrder = new ArrayList<>();
     private int shuffleCursor = -1;
     private final Random shuffleRandom = new Random();
@@ -298,6 +299,7 @@ public class MusicService extends Service {
                     if (newSongs != null) {
                         mySongs = newSongs;
                         position = intent.getIntExtra("pos", 0);
+                        sessionTrackOrder = 1;
                         restoredSeekPosition = 0;
                         restoredDuration = 0;
                         rebuildShuffleOrder(position);
@@ -482,6 +484,7 @@ public class MusicService extends Service {
             position = insertIndex;
 
             stateManager.savePlaylist(mySongs);
+            sessionTrackOrder++;
             restoredSeekPosition = 0;
             restoredDuration = 0;
             startPlayback(nextPath, 0);
@@ -505,6 +508,7 @@ public class MusicService extends Service {
             position = insertIndex;
 
             stateManager.savePlaylist(mySongs);
+            sessionTrackOrder++;
             restoredSeekPosition = 0;
             restoredDuration = 0;
             startPlayback(path, 0);
@@ -567,6 +571,7 @@ public class MusicService extends Service {
         } else {
             position = (position + 1) % mySongs.size();
         }
+        sessionTrackOrder = (mySongs.size() <= 1 || sessionTrackOrder >= mySongs.size()) ? 1 : (sessionTrackOrder + 1);
         playSong(position);
     }
 
@@ -587,6 +592,7 @@ public class MusicService extends Service {
         } else {
             position = (position - 1 < 0) ? mySongs.size() - 1 : position - 1;
         }
+        sessionTrackOrder = (sessionTrackOrder > 1) ? (sessionTrackOrder - 1) : mySongs.size();
         playSong(position);
     }
 
@@ -760,6 +766,9 @@ public class MusicService extends Service {
         intent.putExtra("isShuffle", isShuffle);
         intent.putExtra("isRepeat", repeatMode == REPEAT_ONE);
         intent.putExtra("repeatMode", repeatMode);
+        intent.putExtra("playOrder", getPlayOrderNumber());
+        intent.putExtra("trackIndex", position);
+        intent.putExtra("totalTracks", mySongs.size());
         sendBroadcast(intent);
         
         updateWidget(songPath);
@@ -961,6 +970,18 @@ public class MusicService extends Service {
     public String getCurrentSongTitle() {
         String path = getCurrentSongPath();
         return path != null ? getFileName(path) : null;
+    }
+
+    public int getCurrentTrackIndex() {
+        return position;
+    }
+
+    public int getPlayOrderNumber() {
+        return Math.max(1, sessionTrackOrder);
+    }
+
+    public int getTotalTrackCount() {
+        return mySongs != null ? mySongs.size() : 0;
     }
     
     public MediaPlayer getMediaPlayer() {

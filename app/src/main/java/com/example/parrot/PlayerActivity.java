@@ -56,7 +56,7 @@ public class PlayerActivity extends AppCompatActivity {
     ArrayList<String> mySongs;
     int position = 0;
 
-    TextView txtSong, txtArtistAlbum, txtAudioQualityPill, txtAbLoopPill, txtStart, txtEnd;
+    TextView txtSong, txtArtistAlbum, txtAudioQualityPill, txtTrackCounter, txtAbLoopPill, txtStart, txtEnd;
     SeekBar seekBar;
     ImageView imgView;
     CardView imgViewCard;
@@ -173,6 +173,14 @@ public class PlayerActivity extends AppCompatActivity {
                     syncLyricsToPosition(currentPos, duration);
                     updateAbLoopPillStyle();
                 }
+
+                if (intent.hasExtra("trackIndex") && intent.hasExtra("totalTracks")) {
+                    updateTrackCounter(
+                            intent.getIntExtra("playOrder", 1),
+                            intent.getIntExtra("trackIndex", 0),
+                            intent.getIntExtra("totalTracks", 0)
+                    );
+                }
             } else if (intent.getAction().equals("com.example.parrot.CLOSE_APP")) {
                 finishAffinity();
             }
@@ -191,6 +199,7 @@ public class PlayerActivity extends AppCompatActivity {
         txtSong = findViewById(R.id.txtSong);
         txtArtistAlbum = findViewById(R.id.txtArtistAlbum);
         txtAudioQualityPill = findViewById(R.id.txtAudioQualityPill);
+        txtTrackCounter = findViewById(R.id.txtTrackCounter);
         txtAbLoopPill = findViewById(R.id.txtAbLoopPill);
         txtStart = findViewById(R.id.txtSongStart);
         txtEnd = findViewById(R.id.txtSongEnd);
@@ -248,6 +257,7 @@ public class PlayerActivity extends AppCompatActivity {
                 setSongTitle(cleanFileName(new File(initialSongPath).getName()));
                 currentSongPath = initialSongPath;
                 updateFavIcon(false);
+                updateTrackCounter(1, position, mySongs.size());
                 loadTrackMetadata(initialSongPath);
                 loadLyricsForSong(initialSongPath);
             }
@@ -422,6 +432,11 @@ public class PlayerActivity extends AppCompatActivity {
         if (songPath != null) {
             currentSongPath = songPath;
             updateFavIcon(false);
+            updateTrackCounter(
+                    musicService.getPlayOrderNumber(),
+                    musicService.getCurrentTrackIndex(),
+                    musicService.getTotalTrackCount()
+            );
             loadTrackMetadata(songPath);
             loadLyricsForSong(songPath);
             syncLyricsToPosition(currentPos, duration);
@@ -714,6 +729,16 @@ public class PlayerActivity extends AppCompatActivity {
             Toast.makeText(this, "A–B Loop cleared", Toast.LENGTH_SHORT).show();
         }
         updateAbLoopPillStyle();
+    }
+
+    private void updateTrackCounter(int playOrder, int trackIndex, int totalTracks) {
+        if (txtTrackCounter == null) return;
+        if (totalTracks > 0 && trackIndex >= 0 && trackIndex < totalTracks) {
+            txtTrackCounter.setText("#" + Math.max(1, playOrder) + " \u2022 " + (trackIndex + 1) + "/" + totalTracks);
+            txtTrackCounter.setVisibility(View.VISIBLE);
+        } else {
+            txtTrackCounter.setVisibility(View.GONE);
+        }
     }
 
     private void updateAbLoopPillStyle() {
