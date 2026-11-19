@@ -37,9 +37,9 @@ public final class AutoHideScrollHelper {
         final float hideTouchThresholdPx = 18f * density;
         final float showTouchThresholdPx = 14f * density;
 
-        // If inside HomeFragment's ViewPager2, apply top padding so item 0 sits below the overlay header
+        // If inside HomeFragment's ViewPager2, apply top padding so item 0 sits cleanly below the pill tabs
         if (isInsideViewPager2(listView)) {
-            int topPadDp = (listView instanceof GridView) ? 114 : 106;
+            int topPadDp = (listView instanceof GridView) ? 62 : 56;
             int topPadPx = (int) (topPadDp * density);
             if (listView.getPaddingTop() < topPadPx) {
                 listView.setClipToPadding(false);

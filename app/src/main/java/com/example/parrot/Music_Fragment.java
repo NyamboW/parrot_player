@@ -141,7 +141,7 @@ public class Music_Fragment extends Fragment {
 
         SwipeRefreshLayout refreshLayout = view.findViewById(R.id.pullToRefresh);
         float density = getResources().getDisplayMetrics().density;
-        refreshLayout.setProgressViewOffset(false, (int) (76 * density), (int) (136 * density));
+        refreshLayout.setProgressViewOffset(false, (int) (42 * density), (int) (96 * density));
         refreshLayout.setOnRefreshListener(() -> {
             requestPermission();
             refreshLayout.setRefreshing(false);
