@@ -90,9 +90,21 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
     ListView drawerPlaylistsListView;
     private int currentDestinationId = R.id.homeFragment;
 
+    private static class DrawerPlaylistEntry {
+        final boolean isSmart;
+        final String smartId;
+        final String name;
+
+        DrawerPlaylistEntry(boolean isSmart, String smartId, String name) {
+            this.isSmart = isSmart;
+            this.smartId = smartId;
+            this.name = name;
+        }
+    }
+
     private PlaylistManager playlistManager;
     private FavouritesManager favManager;
-    private final ArrayList<String> drawerPlaylists = new ArrayList<>();
+    private final ArrayList<DrawerPlaylistEntry> drawerPlaylists = new ArrayList<>();
     private BaseAdapter drawerPlaylistsAdapter;
     private String selectedDrawerPlaylist = null;
 
@@ -157,6 +169,9 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
                 if (intent.getAction() == null) return;
                 switch (intent.getAction()) {
                     case MusicService.BROADCAST_UPDATE_UI: {
+                        if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                            refreshDrawerCounts();
+                        }
                         String song = intent.getStringExtra("song");
                         String songPath = intent.getStringExtra("songPath");
                         boolean isPlaying = intent.getBooleanExtra("isPlaying", false);
@@ -387,6 +402,9 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
 
     private void applyAccentTheme() {
         updateDrawerSelection(currentDestinationId);
+        if (drawerPlaylistsAdapter != null) {
+            drawerPlaylistsAdapter.notifyDataSetChanged();
+        }
     }
 
     private int getSelectableItemBackgroundResId() {
@@ -418,16 +436,30 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
                         ? convertView
                         : getLayoutInflater().inflate(R.layout.item_drawer_playlist, parent, false);
 
+                ImageView imgIcon = v.findViewById(R.id.imgDrawerPlaylistIcon);
                 TextView txtName = v.findViewById(R.id.txtDrawerPlaylistName);
                 ImageButton btnDelete = v.findViewById(R.id.btnDeleteDrawerPlaylist);
 
-                String playlistName = drawerPlaylists.get(position);
-                txtName.setText(playlistName);
-                boolean isSelected = playlistName.equals(selectedDrawerPlaylist);
+                DrawerPlaylistEntry entry = drawerPlaylists.get(position);
+                txtName.setText(entry.name);
+                boolean isSelected = entry.name.equals(selectedDrawerPlaylist);
                 txtName.setTypeface(null, isSelected ? Typeface.BOLD : Typeface.NORMAL);
                 txtName.setTextColor(isSelected ? Color.WHITE : COLOR_INACTIVE_ITEM);
 
-                btnDelete.setOnClickListener(view -> confirmDeletePlaylist(playlistName));
+                if (imgIcon != null) {
+                    int iconColor = entry.isSmart
+                            ? AccentColorHelper.getAccentColor(MainActivity.this)
+                            : Color.parseColor("#E0E3E8");
+                    ImageViewCompat.setImageTintList(imgIcon, ColorStateList.valueOf(iconColor));
+                }
+
+                if (entry.isSmart) {
+                    btnDelete.setVisibility(View.GONE);
+                    btnDelete.setOnClickListener(null);
+                } else {
+                    btnDelete.setVisibility(View.VISIBLE);
+                    btnDelete.setOnClickListener(view -> confirmDeletePlaylist(entry.name));
+                }
 
                 return v;
             }
@@ -436,14 +468,19 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
         drawerPlaylistsListView.setAdapter(drawerPlaylistsAdapter);
         drawerPlaylistsListView.setOnItemClickListener((parent, view, position, id) -> {
             if (position >= 0 && position < drawerPlaylists.size()) {
-                String playlistName = drawerPlaylists.get(position);
-                selectedDrawerPlaylist = playlistName;
+                DrawerPlaylistEntry entry = drawerPlaylists.get(position);
+                selectedDrawerPlaylist = entry.name;
                 drawerPlaylistsAdapter.notifyDataSetChanged();
                 drawerLayout.closeDrawer(GravityCompat.START);
 
                 Intent intent = new Intent(MainActivity.this, GroupSongsActivity.class);
-                intent.putExtra("type", "playlist");
-                intent.putExtra("name", playlistName);
+                if (entry.isSmart) {
+                    intent.putExtra("type", "smart_playlist");
+                    intent.putExtra("smart_id", entry.smartId);
+                } else {
+                    intent.putExtra("type", "playlist");
+                }
+                intent.putExtra("name", entry.name);
                 startActivity(intent);
             }
         });
@@ -452,7 +489,12 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
     private void refreshDrawerPlaylists() {
         if (playlistManager == null || drawerPlaylistsAdapter == null) return;
         drawerPlaylists.clear();
-        drawerPlaylists.addAll(playlistManager.getPlaylists());
+        drawerPlaylists.add(new DrawerPlaylistEntry(true, ListeningStatsManager.SMART_RECENTLY_ADDED, "Recently Added"));
+        drawerPlaylists.add(new DrawerPlaylistEntry(true, ListeningStatsManager.SMART_MOST_PLAYED, "Most Played"));
+        drawerPlaylists.add(new DrawerPlaylistEntry(true, ListeningStatsManager.SMART_RECENTLY_PLAYED, "Recently Played"));
+        for (String pl : playlistManager.getPlaylists()) {
+            drawerPlaylists.add(new DrawerPlaylistEntry(false, null, pl));
+        }
         drawerPlaylistsAdapter.notifyDataSetChanged();
     }
 

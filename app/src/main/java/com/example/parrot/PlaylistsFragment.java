@@ -85,11 +85,19 @@ public class PlaylistsFragment extends Fragment {
     }
 
     private final BroadcastReceiver updateReceiver = new BroadcastReceiver() {
+        private String lastSeenSongPath = null;
+
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (isAdded()) {
-                loadPlaylists();
+            if (!isAdded() || intent == null || intent.getAction() == null) return;
+            if (MusicService.BROADCAST_UPDATE_UI.equals(intent.getAction())) {
+                String songPath = intent.getStringExtra("songPath");
+                if (songPath != null && songPath.equals(lastSeenSongPath)) {
+                    return;
+                }
+                lastSeenSongPath = songPath;
             }
+            loadPlaylists();
         }
     };
 
@@ -125,6 +133,7 @@ public class PlaylistsFragment extends Fragment {
         filter.addAction(AccentColorHelper.ACTION_ACCENT_COLOR_CHANGED);
         filter.addAction(PermissionHelper.ACTION_PERMISSIONS_GRANTED);
         filter.addAction(MusicFolderHelper.ACTION_FOLDERS_UPDATED);
+        filter.addAction(MusicService.BROADCAST_UPDATE_UI);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requireContext().registerReceiver(updateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
