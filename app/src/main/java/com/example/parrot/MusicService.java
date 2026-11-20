@@ -130,6 +130,7 @@ public class MusicService extends Service {
     private boolean audioDeviceCallbackReady = false;
     private long lastAutoResumeElapsedMs = 0L;
     private boolean pausedByAudioFocus = false;
+    private volatile boolean isClosing = false;
 
     private static final long STATE_SAVE_INTERVAL_MS = 3000L;
     private static final long TRANSITION_POLL_INTERVAL_MS = 250L;
@@ -299,7 +300,12 @@ public class MusicService extends Service {
             public void onSeekTo(long pos) {
                 seekTo((int) pos);
             }
-            
+
+            @Override
+            public void onStop() {
+                dismissNotificationAndStopService();
+            }
+
             @Override
             public void onCustomAction(String action, Bundle extras) {
                 if (ACTION_CLOSE.equals(action)) {
@@ -329,6 +335,7 @@ public class MusicService extends Service {
 
             switch (action) {
                 case ACTION_START:
+                    isClosing = false;
                     ArrayList<String> newSongs = intent.getStringArrayListExtra("songs");
                     if (newSongs != null) {
                         mySongs = newSongs;
@@ -342,12 +349,15 @@ public class MusicService extends Service {
                     }
                     break;
                 case ACTION_PLAY_PAUSE:
+                    isClosing = false;
                     togglePlay();
                     break;
                 case ACTION_NEXT:
+                    isClosing = false;
                     nextSong();
                     break;
                 case ACTION_PREV:
+                    isClosing = false;
                     prevSong();
                     break;
                 case ACTION_REQUEST_UPDATE:
@@ -436,6 +446,7 @@ public class MusicService extends Service {
 
     private void startPlayback(String songPath, int initialSeekMs) {
         safeRelease();
+        isClosing = false;
         final int token = ++playToken;
         isPrepared = false;
         pausedByAudioFocus = false;
@@ -832,6 +843,7 @@ public class MusicService extends Service {
     }
 
     public void togglePlay() {
+        isClosing = false;
         pausedByAudioFocus = false;
         if (mediaPlayer == null) {
             if (!mySongs.isEmpty() && position >= 0 && position < mySongs.size()) {
@@ -1019,7 +1031,7 @@ public class MusicService extends Service {
     }
 
     private void showNotification(int playPauseBtn) {
-        if (mySongs.isEmpty()) return;
+        if (isClosing || mySongs.isEmpty() || position < 0 || position >= mySongs.size()) return;
         
         String songPath = mySongs.get(position);
         String songName = getFileName(songPath);
@@ -1029,16 +1041,16 @@ public class MusicService extends Service {
                 : "Parrot Audio Player";
 
         Intent prevIntent = new Intent(this, MusicService.class).setAction(ACTION_PREV);
-        PendingIntent prevPendingIntent = PendingIntent.getService(this, 0, prevIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent prevPendingIntent = PendingIntent.getService(this, 1, prevIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent playIntent = new Intent(this, MusicService.class).setAction(ACTION_PLAY_PAUSE);
-        PendingIntent playPendingIntent = PendingIntent.getService(this, 0, playIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent playPendingIntent = PendingIntent.getService(this, 2, playIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent nextIntent = new Intent(this, MusicService.class).setAction(ACTION_NEXT);
-        PendingIntent nextPendingIntent = PendingIntent.getService(this, 0, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent nextPendingIntent = PendingIntent.getService(this, 3, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent closeIntent = new Intent(this, MusicService.class).setAction(ACTION_CLOSE);
-        PendingIntent closePendingIntent = PendingIntent.getService(this, 0, closeIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent closePendingIntent = PendingIntent.getService(this, 4, closeIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent dismissIntent = new Intent(this, MusicService.class).setAction(ACTION_DISMISS_NOTIFICATION);
         PendingIntent dismissPendingIntent = PendingIntent.getService(this, 10, dismissIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -1133,7 +1145,10 @@ public class MusicService extends Service {
     }
     
     private void updateMediaSession() {
-        if (mediaPlayer == null || mySongs.isEmpty() || position < 0 || position >= mySongs.size()) return;
+        if (isClosing || mediaPlayer == null || mySongs.isEmpty() || position < 0 || position >= mySongs.size()) return;
+        if (!mediaSession.isActive()) {
+            mediaSession.setActive(true);
+        }
         
         long currentPosition = getCurrentPosition();
         boolean playing = !isPrepared || isPlaying();
@@ -1154,6 +1169,7 @@ public class MusicService extends Service {
         PlaybackStateCompat.Builder stateBuilder = new PlaybackStateCompat.Builder()
                 .setActions(PlaybackStateCompat.ACTION_PLAY |
                             PlaybackStateCompat.ACTION_PAUSE |
+                            PlaybackStateCompat.ACTION_STOP |
                             PlaybackStateCompat.ACTION_SKIP_TO_NEXT |
                             PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS |
                             PlaybackStateCompat.ACTION_SEEK_TO);
@@ -1184,7 +1200,7 @@ public class MusicService extends Service {
             }
         } else {
             TrackMetadataHelper.loadTrackInfoAsync(songPath, info -> {
-                if (mediaPlayer != null && songPath.equals(getCurrentSongPath())) {
+                if (!isClosing && mediaPlayer != null && songPath.equals(getCurrentSongPath())) {
                     updateMediaSession();
                     showNotification((!isPrepared || isPlaying()) ? R.drawable.ic_pause : R.drawable.ic_play);
                 }
@@ -1204,7 +1220,7 @@ public class MusicService extends Service {
         }
 
         loader.loadFullArt(songPath, bitmap -> {
-            if (mediaPlayer != null && songPath.equals(getCurrentSongPath())) {
+            if (!isClosing && mediaPlayer != null && songPath.equals(getCurrentSongPath())) {
                 if (bitmap != null) {
                     updateMediaSession();
                     showNotification((!isPrepared || isPlaying()) ? R.drawable.ic_pause : R.drawable.ic_play);
@@ -1851,41 +1867,57 @@ public class MusicService extends Service {
     }
 
     private void dismissNotificationAndStopService() {
+        stopServicePlaybackAndClearNotification(false, false);
+    }
+
+    private void closePlayerService() {
+        stopServicePlaybackAndClearNotification(true, true);
+    }
+
+    private void stopServicePlaybackAndClearNotification(boolean clearActiveSongPath, boolean finishAppUi) {
+        isClosing = true;
         pausedByAudioFocus = false;
         activeIsPlaying = false;
-        stopPeriodicStateSave();
-        stateHandler.removeCallbacks(sleepTimerRunnable);
-        if (mediaPlayer != null && isPrepared) {
-            try {
-                if (mediaPlayer.isPlaying()) {
-                    mediaPlayer.pause();
-                }
-            } catch (Exception ignored) {}
-            updateMediaSession();
+        if (clearActiveSongPath) {
+            activeSongPath = null;
         }
+        stopPeriodicStateSave();
+        stateHandler.removeCallbacksAndMessages(null);
+        restoredSeekPosition = Math.max(0, getCurrentPosition());
+        restoredDuration = Math.max(0, getDuration());
         saveCurrentState(true);
         releaseFadingOutPlayer();
         safeRelease();
+
+        if (mediaSession != null) {
+            try {
+                mediaSession.setPlaybackState(new PlaybackStateCompat.Builder()
+                        .setState(PlaybackStateCompat.STATE_STOPPED, 0L, 0f)
+                        .build());
+                mediaSession.setActive(false);
+            } catch (Exception ignored) {}
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+        } else {
+            stopForeground(true);
+        }
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm != null) {
             nm.cancel(1);
         }
-        stopForeground(true);
-        broadcastUIUpdate();
-        stopSelf();
-    }
 
-    private void closePlayerService() {
-        pausedByAudioFocus = false;
-        activeIsPlaying = false;
-        stopPeriodicStateSave();
-        stateHandler.removeCallbacks(sleepTimerRunnable);
-        saveCurrentState(true);
-        releaseFadingOutPlayer();
-        safeRelease();
-        stopForeground(true);
-        stopSelf();
-        sendBroadcast(new Intent("com.example.parrot.CLOSE_APP"));
+        if (finishAppUi) {
+            updateWidget(getCurrentSongPath());
+            stopSelf();
+            Intent closeIntent = new Intent("com.example.parrot.CLOSE_APP");
+            closeIntent.setPackage(getPackageName());
+            sendBroadcast(closeIntent);
+        } else {
+            broadcastUIUpdate();
+            stopSelf();
+        }
     }
 
     @Override
