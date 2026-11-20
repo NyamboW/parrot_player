@@ -1,0 +1,704 @@
+package com.attomaticsystems.parrotplayer;
+
+import android.Manifest;
+import android.content.BroadcastReceiver;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.provider.MediaStore;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.BaseAdapter;
+import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.ListView;
+import android.widget.TextView;
+import android.widget.Toast;
+import android.widget.PopupMenu;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
+import android.graphics.Bitmap;
+import java.io.File;
+import android.content.Context;
+import android.content.SharedPreferences;
+import java.util.Set;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import androidx.appcompat.widget.SearchView;
+
+import androidx.annotation.NonNull;
+import androidx.fragment.app.Fragment;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
+import android.widget.AbsListView;
+import android.widget.SectionIndexer;
+import android.view.ActionMode;
+import android.util.SparseBooleanArray;
+import android.app.AlertDialog;
+
+import com.karumi.dexter.Dexter;
+import com.karumi.dexter.MultiplePermissionsReport;
+import com.karumi.dexter.PermissionToken;
+import com.karumi.dexter.listener.PermissionRequest;
+import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
+
+import java.util.ArrayList;
+
+public class Music_Fragment extends Fragment {
+
+    ListView listView;
+    String[] items;
+    String[] artists;
+    ArrayList<String> songList = new ArrayList<>();
+    FavouritesManager favManager;
+    
+    // Search
+    ArrayList<String> filteredSongList = new ArrayList<>();
+    String[] filteredItems;
+    String[] filteredArtists;
+    
+    // Maintain current search query to apply when loading songs
+    String currentQuery = "";
+
+    private static final String KEY_TRACKS_SORT_MODE = "tracks_sort_mode";
+    private static final String[] SORT_LABELS = new String[]{
+            "Date Added (Newest First)",
+            "Date Added (Oldest First)",
+            "Title (A – Z)",
+            "Title (Z – A)",
+            "Artist (A – Z)",
+            "Duration (Longest First)",
+            "Duration (Shortest First)"
+    };
+    private int currentSortMode = 0;
+    String currentSortOrder = MediaStore.Audio.Media.DATE_ADDED + " DESC";
+    private BaseAdapter songsAdapter;
+    private boolean isMultiSelectMode = false;
+    private boolean permissionGranted = false;
+    private SongDeletionHelper songDeletionHelper;
+
+    private final BroadcastReceiver playbackStateReceiver = new BroadcastReceiver() {
+        private String lastSongPath = null;
+        private boolean lastPlaying = false;
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!isAdded() || intent == null || intent.getAction() == null) return;
+            String action = intent.getAction();
+            if (PermissionHelper.ACTION_PERMISSIONS_GRANTED.equals(action)
+                    || MusicFolderHelper.ACTION_FOLDERS_UPDATED.equals(action)) {
+                permissionGranted = true;
+                loadSongs();
+            } else if (AccentColorHelper.ACTION_ACCENT_COLOR_CHANGED.equals(action)) {
+                if (songsAdapter != null) songsAdapter.notifyDataSetChanged();
+            } else if (MusicService.BROADCAST_UPDATE_UI.equals(action) && songsAdapter != null) {
+                String currentPath = MusicService.getActiveSongPath();
+                boolean currentPlaying = MusicService.isActivelyPlaying();
+                boolean pathChanged = (currentPath == null) ? (lastSongPath != null) : !currentPath.equals(lastSongPath);
+                if (pathChanged || currentPlaying != lastPlaying) {
+                    lastSongPath = currentPath;
+                    lastPlaying = currentPlaying;
+                    songsAdapter.notifyDataSetChanged();
+                }
+            }
+        }
+    };
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        songDeletionHelper = SongDeletionHelper.forFragment(this);
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+                             Bundle savedInstanceState) {
+
+        View view = inflater.inflate(R.layout.fragment_music_, container, false);
+
+        listView = view.findViewById(R.id.listView);
+        listView.setFastScrollEnabled(true);
+        favManager = new FavouritesManager(requireContext());
+        SharedPreferences prefs = requireContext().getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE);
+        currentSortMode = prefs.getInt(KEY_TRACKS_SORT_MODE, 0);
+        updateSortOrderFromMode();
+        
+        setupMultiSelect();
+        
+        // Search views removed from layout, handled via OptionsMenu
+
+        SwipeRefreshLayout refreshLayout = view.findViewById(R.id.pullToRefresh);
+        float density = getResources().getDisplayMetrics().density;
+        refreshLayout.setProgressViewOffset(false, (int) (42 * density), (int) (96 * density));
+        refreshLayout.setOnRefreshListener(() -> {
+            requestPermission();
+            refreshLayout.setRefreshing(false);
+        });
+
+        requestPermission();
+
+        return view;
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @androidx.annotation.Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        ToolbarSearchHelper.attachFragmentSearchMenu(
+                this,
+                R.menu.menu,
+                "Search songs or artists...",
+                query -> {
+                    String next = query != null ? query : "";
+                    if (next.equals(currentQuery)) return;
+                    currentQuery = next;
+                    filterSongs(currentQuery);
+                },
+                this::showSortDialog
+        );
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(MusicService.BROADCAST_UPDATE_UI);
+        filter.addAction(AccentColorHelper.ACTION_ACCENT_COLOR_CHANGED);
+        filter.addAction(PermissionHelper.ACTION_PERMISSIONS_GRANTED);
+        filter.addAction(MusicFolderHelper.ACTION_FOLDERS_UPDATED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requireContext().registerReceiver(playbackStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            requireContext().registerReceiver(playbackStateReceiver, filter);
+        }
+        if (PermissionHelper.hasAudioPermission(requireContext())) {
+            permissionGranted = true;
+            loadSongs();
+        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        try {
+            requireContext().unregisterReceiver(playbackStateReceiver);
+        } catch (Exception ignored) {}
+    }
+
+    private void setupMultiSelect() {
+        listView.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE_MODAL);
+        listView.setMultiChoiceModeListener(new AbsListView.MultiChoiceModeListener() {
+            @Override
+            public void onItemCheckedStateChanged(ActionMode mode, int position, long id, boolean checked) {
+                int count = listView.getCheckedItemCount();
+                mode.setTitle(count + " selected");
+                if (songsAdapter != null) {
+                    songsAdapter.notifyDataSetChanged();
+                }
+            }
+
+            @Override
+            public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+                mode.getMenuInflater().inflate(R.menu.menu_cab_songs, menu);
+                isMultiSelectMode = true;
+                if (songsAdapter != null) {
+                    songsAdapter.notifyDataSetChanged();
+                }
+                return true;
+            }
+
+            @Override
+            public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+                return false;
+            }
+
+            @Override
+            public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+                int id = item.getItemId();
+                if (id == R.id.action_select_all) {
+                    int total = listView.getCount();
+                    boolean selectAll = listView.getCheckedItemCount() < total;
+                    for (int idx = 0; idx < total; idx++) {
+                        listView.setItemChecked(idx, selectAll);
+                    }
+                    if (songsAdapter != null) {
+                        songsAdapter.notifyDataSetChanged();
+                    }
+                    return true;
+                }
+
+                SparseBooleanArray checked = listView.getCheckedItemPositions();
+                ArrayList<String> selectedPaths = new ArrayList<>();
+                for (int i = 0; i < checked.size(); i++) {
+                    int pos = checked.keyAt(i);
+                    if (checked.valueAt(i) && pos >= 0 && pos < filteredSongList.size()) {
+                        selectedPaths.add(filteredSongList.get(pos));
+                    }
+                }
+                if (selectedPaths.isEmpty()) {
+                    mode.finish();
+                    return true;
+                }
+
+                if (id == R.id.action_play_selected) {
+                    MusicService.startPlaybackList(requireActivity(), selectedPaths, 0);
+                    mode.finish();
+                    return true;
+                } else if (id == R.id.action_add_to_queue) {
+                    Intent intent = new Intent(getContext(), MusicService.class);
+                    intent.setAction(MusicService.ACTION_ADD_MULTIPLE_TO_QUEUE);
+                    intent.putStringArrayListExtra("songPaths", selectedPaths);
+                    requireContext().startService(intent);
+                    Toast.makeText(getContext(), selectedPaths.size() + " added to queue", Toast.LENGTH_SHORT).show();
+                    mode.finish();
+                    return true;
+                } else if (id == R.id.action_play_next) {
+                    Intent intent = new Intent(getContext(), MusicService.class);
+                    intent.setAction(MusicService.ACTION_PLAY_NEXT_MULTIPLE);
+                    intent.putStringArrayListExtra("songPaths", selectedPaths);
+                    requireContext().startService(intent);
+                    Toast.makeText(getContext(), selectedPaths.size() + " will play next", Toast.LENGTH_SHORT).show();
+                    mode.finish();
+                    return true;
+                } else if (id == R.id.action_add_to_playlist) {
+                    showAddMultipleToPlaylistDialog(selectedPaths);
+                    mode.finish();
+                    return true;
+                } else if (id == R.id.action_fav) {
+                    favManager.addFavourites(selectedPaths);
+                    Toast.makeText(getContext(), selectedPaths.size() + " added to Favourites", Toast.LENGTH_SHORT).show();
+                    mode.finish();
+                    return true;
+                } else if (id == R.id.action_delete) {
+                    mode.finish();
+                    if (songDeletionHelper != null) {
+                        songDeletionHelper.deleteSongs(selectedPaths, () -> {
+                            if (isAdded()) loadSongs();
+                        });
+                    }
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public void onDestroyActionMode(ActionMode mode) {
+                isMultiSelectMode = false;
+                if (songsAdapter != null) {
+                    songsAdapter.notifyDataSetChanged();
+                }
+            }
+        });
+    }
+
+    private void requestPermission() {
+        if (!isAdded()) return;
+        PermissionHelper.ensurePermissions(requireContext(), () -> {
+            if (isAdded()) {
+                permissionGranted = true;
+                loadSongs();
+                MusicFolderHelper.promptIfNotConfigured(requireContext(), () -> {
+                    if (isAdded()) loadSongs();
+                });
+            }
+        });
+    }
+
+    private void loadSongs() {
+        if (!isAdded() || !PermissionHelper.hasAudioPermission(requireContext())) return;
+
+        songList.clear();
+        ArrayList<String> artistList = new ArrayList<>();
+
+        Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+
+        String selection = MediaStore.Audio.Media.IS_MUSIC + "!=0";
+
+        Cursor cursor = requireContext().getContentResolver().query(
+                uri,
+                null,
+                selection,
+                null,
+                currentSortOrder
+        );
+
+        if (cursor != null) {
+            while (cursor.moveToNext()) {
+
+                String path = cursor.getString(
+                        cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+                );
+
+                if (!MusicFolderHelper.isPathAllowed(requireContext(), path)) {
+                    continue;
+                }
+                
+                String artist = "<Unknown>";
+                try {
+                    artist = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST));
+                } catch (Exception e) {}
+
+                try {
+                    long durationMs = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION));
+                    TrackMetadataHelper.cacheDuration(path, durationMs);
+                } catch (Exception ignored) {}
+
+                songList.add(path);
+                artistList.add(artist);
+            }
+            cursor.close();
+        }
+
+        items = new String[songList.size()];
+        artists = new String[songList.size()];
+
+        for (int i = 0; i < songList.size(); i++) {
+            String fullPath = songList.get(i);
+            String name = fullPath.substring(fullPath.lastIndexOf("/") + 1);
+            items[i] = name.replaceAll("(?i)\\.(mp3|wav|m4a|flac|ogg|aac)$", "");
+            artists[i] = artistList.get(i);
+        }
+
+        // If sorting by display title (A-Z or Z-A), sort by the cleaned display name
+        if (currentSortMode == 2 || currentSortMode == 3) {
+            ArrayList<Integer> indices = new ArrayList<>(songList.size());
+            for (int i = 0; i < songList.size(); i++) indices.add(i);
+            final boolean desc = (currentSortMode == 3);
+            java.util.Collections.sort(indices, (a, b) -> {
+                int cmp = items[a].compareToIgnoreCase(items[b]);
+                return desc ? -cmp : cmp;
+            });
+            ArrayList<String> sortedPaths = new ArrayList<>(songList.size());
+            String[] sortedItems = new String[songList.size()];
+            String[] sortedArtists = new String[songList.size()];
+            for (int i = 0; i < indices.size(); i++) {
+                int idx = indices.get(i);
+                sortedPaths.add(songList.get(idx));
+                sortedItems[i] = items[idx];
+                sortedArtists[i] = artists[idx];
+            }
+            songList = sortedPaths;
+            items = sortedItems;
+            artists = sortedArtists;
+        }
+        
+        // Apply current search filter
+        if (currentQuery.isEmpty()) {
+            filteredSongList = new ArrayList<>(songList);
+            filteredItems = items.clone();
+            filteredArtists = artists.clone();
+        } else {
+            filterSongs(currentQuery);
+            return; // filterSongs calls setAdapter
+        }
+
+        setAdapter();
+    }
+    
+    private void filterSongs(String query) {
+        filteredSongList.clear();
+        ArrayList<String> tempItems = new ArrayList<>();
+        ArrayList<String> tempArtists = new ArrayList<>();
+        
+        if (query.isEmpty()) {
+            filteredSongList.addAll(songList);
+            for (String item : items) tempItems.add(item);
+            for (String artist : artists) tempArtists.add(artist);
+        } else {
+            String lowerQuery = query.toLowerCase();
+            for (int i = 0; i < songList.size(); i++) {
+                boolean matchName = items[i].toLowerCase().contains(lowerQuery);
+                boolean matchArtist = artists[i].toLowerCase().contains(lowerQuery);
+                if (matchName || matchArtist) {
+                    filteredSongList.add(songList.get(i));
+                    tempItems.add(items[i]);
+                    tempArtists.add(artists[i]);
+                }
+            }
+        }
+        
+        filteredItems = tempItems.toArray(new String[0]);
+        filteredArtists = tempArtists.toArray(new String[0]);
+        
+        setAdapter();
+    }
+    
+    private abstract static class IndexedBaseAdapter extends BaseAdapter implements SectionIndexer {}
+
+    private void setAdapter() {
+        final AlphabetSectionIndexer indexer = new AlphabetSectionIndexer(filteredItems);
+        songsAdapter = new IndexedBaseAdapter() {
+
+            @Override
+            public Object[] getSections() {
+                return indexer.getSections();
+            }
+
+            @Override
+            public int getPositionForSection(int sectionIndex) {
+                return indexer.getPositionForSection(sectionIndex);
+            }
+
+            @Override
+            public int getSectionForPosition(int position) {
+                return indexer.getSectionForPosition(position);
+            }
+
+            @Override
+            public int getCount() {
+                return filteredItems.length;
+            }
+
+            @Override
+            public Object getItem(int i) {
+                return null;
+            }
+
+            @Override
+            public long getItemId(int i) {
+                return 0;
+            }
+
+            @Override
+            public View getView(int i, View view, ViewGroup parent) {
+
+                View v = getLayoutInflater().inflate(R.layout.list_items, null);
+                TextView txt = v.findViewById(R.id.txtSong);
+                TextView txtArtist = v.findViewById(R.id.txtartist);
+                ImageView img = v.findViewById(R.id.songImg);
+                ImageView btnMore = v.findViewById(R.id.btnMore);
+                ImageView imgCheckMark = v.findViewById(R.id.imgCheckMark);
+                
+                txt.setText(filteredItems[i]);
+                if (txtArtist != null) {
+                    txtArtist.setText(filteredArtists[i]);
+                }
+
+                boolean isChecked = isMultiSelectMode && listView.isItemChecked(i);
+                if (isMultiSelectMode) {
+                    if (btnMore != null) btnMore.setVisibility(View.GONE);
+                    if (imgCheckMark != null) {
+                        imgCheckMark.setVisibility(View.VISIBLE);
+                        imgCheckMark.setImageResource(isChecked
+                                ? R.drawable.ic_check_circle_filled
+                                : R.drawable.ic_check_circle_outline);
+                        imgCheckMark.setImageTintList(isChecked
+                                ? android.content.res.ColorStateList.valueOf(
+                                        AccentColorHelper.getAccentColor(requireContext()))
+                                : null);
+                    }
+                } else {
+                    if (btnMore != null) btnMore.setVisibility(View.VISIBLE);
+                    if (imgCheckMark != null) imgCheckMark.setVisibility(View.GONE);
+                }
+                
+                String path = filteredSongList.get(i);
+                img.setTag(path);
+                NowPlayingBarsView.bindRow(v, path, txt);
+                
+                if (btnMore != null) {
+                    btnMore.setOnClickListener(view1 -> {
+                        PopupMenu popupMenu = new PopupMenu(getContext(), view1);
+                        popupMenu.getMenuInflater().inflate(R.menu.song_menu, popupMenu.getMenu());
+                        
+                        if (favManager.isFavourite(path)) {
+                            popupMenu.getMenu().findItem(R.id.action_fav).setTitle("Remove from Favourites");
+                        }
+                        
+                        popupMenu.setOnMenuItemClickListener(item -> {
+                            if (item.getItemId() == R.id.action_fav) {
+                                favManager.toggleFavourite(path);
+                                Toast.makeText(getContext(), favManager.isFavourite(path) ? "Added to Favourites" : "Removed from Favourites", Toast.LENGTH_SHORT).show();
+                                return true;
+                            } else if (item.getItemId() == R.id.action_delete) {
+                                deleteSong(path);
+                                return true;
+                            } else if (item.getItemId() == R.id.action_play_next) {
+                                Intent intent = new Intent(getContext(), MusicService.class);
+                                intent.setAction(MusicService.ACTION_PLAY_NEXT);
+                                intent.putExtra("songPath", path);
+                                requireContext().startService(intent);
+                                Toast.makeText(getContext(), "Will play next", Toast.LENGTH_SHORT).show();
+                                return true;
+                            } else if (item.getItemId() == R.id.action_add_to_queue) {
+                                Intent intent = new Intent(getContext(), MusicService.class);
+                                intent.setAction(MusicService.ACTION_ADD_TO_QUEUE);
+                                intent.putExtra("songPath", path);
+                                requireContext().startService(intent);
+                                Toast.makeText(getContext(), "Added to queue", Toast.LENGTH_SHORT).show();
+                                return true;
+                            } else if (item.getItemId() == R.id.action_add_to_playlist) {
+                                showAddToPlaylistDialog(path);
+                                return true;
+                            } else if (SongMenuActionsHelper.handleCommonMenuAction(requireContext(), item.getItemId(), path)) {
+                                return true;
+                            }
+                            return false;
+                        });
+                        popupMenu.show();
+                    });
+                }
+                
+                AlbumArtLoader loader = AlbumArtLoader.getInstance();
+                Bitmap cachedBitmap = loader.getCachedThumb(path);
+                if (cachedBitmap != null) {
+                    img.setImageBitmap(cachedBitmap);
+                } else {
+                    img.setImageResource(R.drawable.ic_music);
+                    if (!loader.hasNoArt(path)) {
+                        loader.loadThumbArt(path, bitmap -> {
+                            if (bitmap != null && isAdded() && path.equals(img.getTag())) {
+                                img.setImageBitmap(bitmap);
+                            }
+                        });
+                    }
+                }
+                
+                return v;
+            }
+        };
+        listView.setAdapter(songsAdapter);
+
+        AutoHideScrollHelper.attach(listView, getActivity(), new AbsListView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(AbsListView view, int scrollState) {
+                if (scrollState == SCROLL_STATE_TOUCH_SCROLL) {
+                    hideKeyboard(view);
+                }
+            }
+
+            @Override
+            public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {}
+        });
+
+        listView.setOnItemClickListener((AdapterView<?> parent, View view, int position, long id) -> {
+            hideKeyboard(listView);
+            // Pass the full song list but find the correct position for the tapped filtered song
+            String tappedPath = filteredSongList.get(position);
+            int actualPosition = songList.indexOf(tappedPath);
+            if (actualPosition == -1) actualPosition = position;
+
+            MusicService.startPlaybackList(requireActivity(), songList, actualPosition);
+        });
+    }
+
+    private void deleteSong(String path) {
+        if (songDeletionHelper != null) {
+            songDeletionHelper.deleteSong(path, () -> {
+                if (isAdded()) loadSongs();
+            });
+        }
+    }
+
+    private void updateSortOrderFromMode() {
+        switch (currentSortMode) {
+            case 1:
+                currentSortOrder = MediaStore.Audio.Media.DATE_ADDED + " ASC";
+                break;
+            case 2:
+                currentSortOrder = MediaStore.Audio.Media.TITLE + " COLLATE NOCASE ASC";
+                break;
+            case 3:
+                currentSortOrder = MediaStore.Audio.Media.TITLE + " COLLATE NOCASE DESC";
+                break;
+            case 4:
+                currentSortOrder = MediaStore.Audio.Media.ARTIST + " COLLATE NOCASE ASC, "
+                        + MediaStore.Audio.Media.TITLE + " COLLATE NOCASE ASC";
+                break;
+            case 5:
+                currentSortOrder = MediaStore.Audio.Media.DURATION + " DESC";
+                break;
+            case 6:
+                currentSortOrder = MediaStore.Audio.Media.DURATION + " ASC";
+                break;
+            case 0:
+            default:
+                currentSortOrder = MediaStore.Audio.Media.DATE_ADDED + " DESC";
+                break;
+        }
+    }
+
+    private void showSortDialog() {
+        if (!isAdded()) return;
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Sort Tracks By")
+                .setSingleChoiceItems(SORT_LABELS, currentSortMode, (dialog, which) -> {
+                    currentSortMode = which;
+                    requireContext().getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE)
+                            .edit()
+                            .putInt(KEY_TRACKS_SORT_MODE, currentSortMode)
+                            .apply();
+                    updateSortOrderFromMode();
+                    loadSongs();
+                    dialog.dismiss();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void hideKeyboard(View anchor) {
+        if (!isAdded()) return;
+        InputMethodManager imm = (InputMethodManager) requireContext()
+                .getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            View focused = getActivity() != null ? getActivity().getCurrentFocus() : null;
+            View target = focused != null ? focused : anchor;
+            if (target != null) {
+                imm.hideSoftInputFromWindow(target.getWindowToken(), 0);
+                target.clearFocus();
+            }
+        }
+    }
+
+    private void showAddToPlaylistDialog(String songPath) {
+        ArrayList<String> single = new ArrayList<>();
+        single.add(songPath);
+        showAddMultipleToPlaylistDialog(single);
+    }
+
+    private void showAddMultipleToPlaylistDialog(ArrayList<String> songPaths) {
+        PlaylistManager playlistManager = new PlaylistManager(requireContext());
+        ArrayList<String> playlists = playlistManager.getPlaylists();
+        ArrayList<String> options = new ArrayList<>();
+        options.add("+ Create New Playlist");
+        options.addAll(playlists);
+
+        String[] playlistArray = options.toArray(new String[0]);
+        new android.app.AlertDialog.Builder(requireContext())
+            .setTitle("Add to Playlist")
+            .setItems(playlistArray, (dialog, which) -> {
+                if (which == 0) {
+                    final EditText input = new EditText(requireContext());
+                    input.setHint("Playlist name");
+                    new android.app.AlertDialog.Builder(requireContext())
+                        .setTitle("Create New Playlist")
+                        .setView(input)
+                        .setPositiveButton("Create & Add", (d, w) -> {
+                            String name = input.getText().toString().trim();
+                            if (!name.isEmpty()) {
+                                playlistManager.createPlaylist(name);
+                                playlistManager.addSongsToPlaylist(name, songPaths);
+                                Toast.makeText(getContext(), songPaths.size() + " added to " + name, Toast.LENGTH_SHORT).show();
+                            }
+                        })
+                        .setNegativeButton("Cancel", null)
+                        .show();
+                } else {
+                    String selectedPlaylist = playlistArray[which];
+                    playlistManager.addSongsToPlaylist(selectedPlaylist, songPaths);
+                    Toast.makeText(getContext(), songPaths.size() + " added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
+                }
+            })
+            .show();
+    }
+}

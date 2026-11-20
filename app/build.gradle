@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace "com.example.parrot"
+    namespace "com.attomaticsystems.parrotplayer"
     compileSdk 35
 
     defaultConfig {
-        applicationId "com.example.parrot"
+        applicationId "com.attomaticsystems.parrotplayer"
         minSdk 21
         targetSdk 35
         versionCode 1
