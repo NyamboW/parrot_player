@@ -1056,6 +1056,7 @@ public class MusicService extends Service {
         PendingIntent dismissPendingIntent = PendingIntent.getService(this, 10, dismissIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent intent = new Intent(this, PlayerActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent contentIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Bitmap icon = AlbumArtLoader.getInstance().getBestCachedArt(songPath);

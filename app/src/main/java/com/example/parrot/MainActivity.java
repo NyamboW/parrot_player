@@ -66,6 +66,7 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
     ImageButton miniNext;
     private String miniLoadedSongPath = null;
     private boolean miniHasActualArt = false;
+    private long lastPlayerOpenElapsedMs = 0L;
     private final Handler miniProgressHandler = new Handler(Looper.getMainLooper());
     private final Runnable miniProgressRunnable = new Runnable() {
         @Override
@@ -592,7 +593,14 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
 
             @Override
             public boolean onSingleTapUp(MotionEvent e) {
-                startActivity(new Intent(MainActivity.this, PlayerActivity.class));
+                long now = android.os.SystemClock.elapsedRealtime();
+                if (now - lastPlayerOpenElapsedMs < 450L) {
+                    return true;
+                }
+                lastPlayerOpenElapsedMs = now;
+                Intent playerIntent = new Intent(MainActivity.this, PlayerActivity.class);
+                playerIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                startActivity(playerIntent);
                 return true;
             }
 

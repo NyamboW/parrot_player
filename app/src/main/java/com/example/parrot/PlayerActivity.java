@@ -1,5 +1,6 @@
 package com.example.parrot;
 
+import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
@@ -36,6 +37,7 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
@@ -201,6 +203,13 @@ public class PlayerActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         overridePendingTransition(R.anim.slide_in_up, R.anim.stay_still);
         setContentView(R.layout.activity_player);
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                navigateBackFromPlayer();
+            }
+        });
 
         favManager = new FavouritesManager(this);
 
@@ -1567,6 +1576,15 @@ public class PlayerActivity extends AppCompatActivity {
     }
 
     private boolean isTouchInsideExcludedScrollView(float rawX, float rawY) {
+        if (btnBack != null && isPointInsideView(btnBack, rawX, rawY, 12)) {
+            return true;
+        }
+        if (btnEq != null && isPointInsideView(btnEq, rawX, rawY, 12)) {
+            return true;
+        }
+        if (btnTimerSpeed != null && isPointInsideView(btnTimerSpeed, rawX, rawY, 12)) {
+            return true;
+        }
         if (seekBar != null && isPointInsideView(seekBar, rawX, rawY, 16)) {
             return true;
         }
@@ -1588,7 +1606,7 @@ public class PlayerActivity extends AppCompatActivity {
     }
 
     private void animateMinimizeToMiniPlayer() {
-        if (isMinimizing) return;
+        if (isMinimizing || isFinishing() || isDestroyed()) return;
         isMinimizing = true;
 
         if (isTaskRoot()) {
@@ -1597,11 +1615,29 @@ public class PlayerActivity extends AppCompatActivity {
             startActivity(mainIntent);
         }
 
-        if (playerRootLayout != null) {
+        boolean animatorsEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.O
+                || ValueAnimator.areAnimatorsEnabled();
+        if (playerRootLayout != null && animatorsEnabled) {
             int screenH = getResources().getDisplayMetrics().heightPixels;
             float remainingRatio = Math.max(0.35f, 1f - (playerRootLayout.getTranslationY() / Math.max(1f, screenH)));
-            long duration = (long) (220 * remainingRatio);
+            long duration = Math.max(80L, (long) (220 * remainingRatio));
 
+            final Runnable completeMinimize = new Runnable() {
+                private boolean completed = false;
+
+                @Override
+                public void run() {
+                    if (completed) return;
+                    completed = true;
+                    handler.removeCallbacks(this);
+                    if (!isFinishing() && !isDestroyed()) {
+                        finish();
+                        overridePendingTransition(0, 0);
+                    }
+                }
+            };
+
+            handler.postDelayed(completeMinimize, duration + 60L);
             playerRootLayout.animate().cancel();
             playerRootLayout.animate()
                     .translationY(screenH)
@@ -1610,10 +1646,7 @@ public class PlayerActivity extends AppCompatActivity {
                     .alpha(0f)
                     .setDuration(duration)
                     .setInterpolator(new DecelerateInterpolator())
-                    .withEndAction(() -> {
-                        finish();
-                        overridePendingTransition(0, 0);
-                    })
+                    .withEndAction(completeMinimize)
                     .start();
         } else {
             finish();
@@ -1623,11 +1656,6 @@ public class PlayerActivity extends AppCompatActivity {
 
     private void navigateBackFromPlayer() {
         animateMinimizeToMiniPlayer();
-    }
-
-    @Override
-    public void onBackPressed() {
-        navigateBackFromPlayer();
     }
 
     @Override
