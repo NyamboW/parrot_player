@@ -41,16 +41,6 @@ import java.util.Collections;
 import java.util.Locale;
 import java.util.Random;
 
-import android.appwidget.AppWidgetManager;
-import android.content.ComponentName;
-import android.widget.RemoteViews;
-import android.graphics.Canvas;
-import android.graphics.Paint;
-import android.graphics.PorterDuff;
-import android.graphics.PorterDuffXfermode;
-import android.graphics.Rect;
-import android.graphics.RectF;
-
 public class MusicService extends Service {
 
     public static final String ACTION_START = "ACTION_START";
@@ -140,6 +130,7 @@ public class MusicService extends Service {
         public void run() {
             if (isPlaying()) {
                 saveCurrentState(false);
+                updateWidget(getCurrentSongPath());
                 stateHandler.postDelayed(this, STATE_SAVE_INTERVAL_MS);
             }
         }
@@ -350,15 +341,27 @@ public class MusicService extends Service {
                     break;
                 case ACTION_PLAY_PAUSE:
                     isClosing = false;
-                    togglePlay();
+                    if (mySongs.isEmpty()) {
+                        stopEmptyForegroundActionSafely();
+                    } else {
+                        togglePlay();
+                    }
                     break;
                 case ACTION_NEXT:
                     isClosing = false;
-                    nextSong();
+                    if (mySongs.isEmpty()) {
+                        stopEmptyForegroundActionSafely();
+                    } else {
+                        nextSong();
+                    }
                     break;
                 case ACTION_PREV:
                     isClosing = false;
-                    prevSong();
+                    if (mySongs.isEmpty()) {
+                        stopEmptyForegroundActionSafely();
+                    } else {
+                        prevSong();
+                    }
                     break;
                 case ACTION_REQUEST_UPDATE:
                     broadcastUIUpdate();
@@ -1204,6 +1207,7 @@ public class MusicService extends Service {
                 if (!isClosing && mediaPlayer != null && songPath.equals(getCurrentSongPath())) {
                     updateMediaSession();
                     showNotification((!isPrepared || isPlaying()) ? R.drawable.ic_pause : R.drawable.ic_play);
+                    updateWidget(songPath);
                 }
             });
         }
@@ -1232,29 +1236,30 @@ public class MusicService extends Service {
         });
     }
 
-    private void updateWidget(String songPath) {
-        if (songPath == null) return;
-        AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(this);
-        ComponentName widgetComponent = new ComponentName(this, PlayerWidgetProvider.class);
-        int[] widgetIds = appWidgetManager.getAppWidgetIds(widgetComponent);
-        if (widgetIds == null || widgetIds.length == 0) return;
-
-        RemoteViews views = PlayerWidgetProvider.getWidgetViews(this);
-        views.setTextViewText(R.id.widgetSongName, getFileName(songPath));
-        boolean showPause = (mediaPlayer != null && !isPrepared) || isPlaying();
-        views.setImageViewResource(R.id.widgetPlayPause,
-                showPause ? R.drawable.ic_pause : R.drawable.ic_play);
-
-        Bitmap albumArt = AlbumArtLoader.getInstance().getBestCachedArt(songPath);
-        if (albumArt != null) {
-            Bitmap scaled = Bitmap.createScaledBitmap(albumArt, 100, 100, true);
-            Bitmap rounded = getRoundedCornerBitmap(scaled, 16);
-            views.setImageViewBitmap(R.id.widgetAlbumArt, rounded);
-        } else {
-            views.setImageViewResource(R.id.widgetAlbumArt, R.drawable.ic_music);
+    private void stopEmptyForegroundActionSafely() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                Notification placeholder = new NotificationCompat.Builder(this, ApplicationClass.CHANNEL_ID_1)
+                        .setSmallIcon(R.drawable.ic_music)
+                        .setContentTitle("Parrot Audio Player")
+                        .setContentText("No music queued")
+                        .setPriority(NotificationCompat.PRIORITY_LOW)
+                        .build();
+                startForeground(1, placeholder);
+            } catch (Exception ignored) {}
         }
+        stopForeground(true);
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) {
+            nm.cancel(1);
+        }
+        PlayerWidgetProvider.pushLiveUpdate(this, null, false, 0, 0);
+        stopSelf();
+    }
 
-        appWidgetManager.updateAppWidget(widgetIds, views);
+    private void updateWidget(String songPath) {
+        boolean showPause = !isClosing && ((mediaPlayer != null && !isPrepared) || isPlaying());
+        PlayerWidgetProvider.pushLiveUpdate(this, songPath, showPause, getCurrentPosition(), getDuration());
     }
 
     private void preloadNextSongArt() {
@@ -1288,27 +1293,6 @@ public class MusicService extends Service {
                 }
             }
         }
-    }
-    
-    private Bitmap getRoundedCornerBitmap(Bitmap bitmap, int pixels) {
-        Bitmap output = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(output);
-
-        final int color = 0xff424242;
-        final Paint paint = new Paint();
-        final Rect rect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());
-        final RectF rectF = new RectF(rect);
-        final float roundPx = pixels;
-
-        paint.setAntiAlias(true);
-        canvas.drawARGB(0, 0, 0, 0);
-        paint.setColor(color);
-        canvas.drawRoundRect(rectF, roundPx, roundPx, paint);
-
-        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
-        canvas.drawBitmap(bitmap, rect, rect, paint);
-
-        return output;
     }
 
     private String getFileName(String path) {
@@ -1382,6 +1366,7 @@ public class MusicService extends Service {
         if (mediaPlayer != null && isPrepared) {
             mediaPlayer.seekTo(pos);
             updateMediaSession();
+            updateWidget(getCurrentSongPath());
             saveCurrentState(false);
         } else if (!mySongs.isEmpty()) {
             restoredSeekPosition = Math.max(0, pos);
