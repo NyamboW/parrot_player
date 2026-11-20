@@ -105,7 +105,6 @@ public class FavFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setHasOptionsMenu(true);
         favManager = new FavouritesManager(requireContext());
         executorService = Executors.newFixedThreadPool(2);
         songDeletionHelper = SongDeletionHelper.forFragment(this);
@@ -128,6 +127,23 @@ public class FavFragment extends Fragment {
         setupMultiSelect();
         
         return view;
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @androidx.annotation.Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        ToolbarSearchHelper.attachFragmentSearchMenu(
+                this,
+                R.menu.menu,
+                "Search favourites...",
+                query -> {
+                    String next = query != null ? query : "";
+                    if (next.equals(currentQuery)) return;
+                    currentQuery = next;
+                    filterFavSongs(currentQuery);
+                },
+                this::showFavSortDialog
+        );
     }
 
     private void setupMultiSelect() {
@@ -555,85 +571,6 @@ public class FavFragment extends Fragment {
                 if (isAdded()) loadFavourites();
             });
         }
-    }
-
-    @Override
-    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
-        inflater.inflate(R.menu.menu, menu);
-        MenuItem searchItem = menu.findItem(R.id.item_search);
-        if (searchItem != null) {
-            SearchView searchView = (SearchView) searchItem.getActionView();
-            if (searchView != null) {
-                searchView.setIconifiedByDefault(true);
-                searchView.setMaxWidth(Integer.MAX_VALUE);
-                searchView.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
-                searchView.setQueryHint("Search favourites...");
-
-                EditText searchEditText = searchView.findViewById(androidx.appcompat.R.id.search_src_text);
-                if (searchEditText != null) {
-                    searchEditText.setTextColor(android.graphics.Color.WHITE);
-                    searchEditText.setHintTextColor(android.graphics.Color.parseColor("#8A93A2"));
-                }
-                View searchPlate = searchView.findViewById(androidx.appcompat.R.id.search_plate);
-                if (searchPlate != null) {
-                    searchPlate.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                }
-
-                searchItem.setOnActionExpandListener(new MenuItem.OnActionExpandListener() {
-                    @Override
-                    public boolean onMenuItemActionExpand(MenuItem item) {
-                        searchView.postDelayed(() -> {
-                            if (!isAdded()) return;
-                            searchView.requestFocus();
-                            View target = searchEditText != null ? searchEditText : searchView;
-                            target.requestFocus();
-                            InputMethodManager imm = (InputMethodManager) requireContext()
-                                    .getSystemService(Context.INPUT_METHOD_SERVICE);
-                            if (imm != null) {
-                                imm.showSoftInput(target, InputMethodManager.SHOW_IMPLICIT);
-                            }
-                        }, 120);
-                        return true;
-                    }
-
-                    @Override
-                    public boolean onMenuItemActionCollapse(MenuItem item) {
-                        currentQuery = "";
-                        searchView.setQuery("", false);
-                        filterFavSongs("");
-                        searchView.clearFocus();
-                        hideKeyboard(searchView);
-                        return true;
-                    }
-                });
-
-                searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
-                    @Override
-                    public boolean onQueryTextSubmit(String query) {
-                        searchView.clearFocus();
-                        hideKeyboard(searchView);
-                        return true;
-                    }
-
-                    @Override
-                    public boolean onQueryTextChange(String newText) {
-                        currentQuery = newText != null ? newText : "";
-                        filterFavSongs(currentQuery);
-                        return true;
-                    }
-                });
-            }
-        }
-        super.onCreateOptionsMenu(menu, inflater);
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        if (item.getItemId() == R.id.item_sort) {
-            showFavSortDialog();
-            return true;
-        }
-        return super.onOptionsItemSelected(item);
     }
 
     private void showFavSortDialog() {

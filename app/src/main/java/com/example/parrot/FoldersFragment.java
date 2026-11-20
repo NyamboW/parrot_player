@@ -11,8 +11,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.LayoutInflater;
-import android.view.Menu;
-import android.view.MenuInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -58,12 +56,6 @@ public class FoldersFragment extends Fragment {
         }
     };
 
-    @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setHasOptionsMenu(true);
-    }
-
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
@@ -74,18 +66,15 @@ public class FoldersFragment extends Fragment {
     }
 
     @Override
-    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
-        currentQuery = "";
-        filterFolders("");
-        ToolbarSearchHelper.setupSearchMenu(
-                requireContext(),
-                menu,
-                inflater,
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        ToolbarSearchHelper.attachFragmentSearchMenu(
+                this,
                 R.menu.menu_search,
                 "Search folders...",
-                this::filterFolders
+                this::filterFolders,
+                null
         );
-        super.onCreateOptionsMenu(menu, inflater);
     }
 
     @Override
@@ -202,7 +191,9 @@ public class FoldersFragment extends Fragment {
     }
 
     private void filterFolders(String query) {
-        currentQuery = query != null ? query : "";
+        String next = query != null ? query : "";
+        if (next.equals(currentQuery)) return;
+        currentQuery = next;
         applyFolderFilter();
         if (adapter != null) {
             adapter.notifyDataSetChanged();

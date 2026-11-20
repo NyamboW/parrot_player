@@ -11,8 +11,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.LayoutInflater;
-import android.view.Menu;
-import android.view.MenuInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -60,15 +58,10 @@ public class AlbumsFragment extends Fragment {
         }
     };
 
-    @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setHasOptionsMenu(true);
-    }
-
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
+            @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_albums_grid, container, false);
         gridView = view.findViewById(R.id.gridViewAlbums);
         loadAlbums();
@@ -76,18 +69,14 @@ public class AlbumsFragment extends Fragment {
     }
 
     @Override
-    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
-        currentQuery = "";
-        filterAlbums("");
-        ToolbarSearchHelper.setupSearchMenu(
-                requireContext(),
-                menu,
-                inflater,
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        ToolbarSearchHelper.attachFragmentSearchMenu(
+                this,
                 R.menu.menu_search,
                 "Search albums or artists...",
-                this::filterAlbums
-        );
-        super.onCreateOptionsMenu(menu, inflater);
+                this::filterAlbums,
+                null);
     }
 
     @Override
@@ -109,17 +98,19 @@ public class AlbumsFragment extends Fragment {
         super.onPause();
         try {
             requireContext().unregisterReceiver(libraryReceiver);
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 
     private void loadAlbums() {
         allAlbums.clear();
         albums.clear();
-        if (!isAdded() || !PermissionHelper.hasAudioPermission(requireContext())) return;
+        if (!isAdded() || !PermissionHelper.hasAudioPermission(requireContext()))
+            return;
         Map<String, AlbumItem> albumMap = new LinkedHashMap<>();
 
         Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-        String[] projection = new String[]{
+        String[] projection = new String[] {
                 MediaStore.Audio.Media.ALBUM,
                 MediaStore.Audio.Media.ARTIST,
                 MediaStore.Audio.Media.DATA
@@ -127,8 +118,7 @@ public class AlbumsFragment extends Fragment {
         String selection = MediaStore.Audio.Media.IS_MUSIC + "!=0";
 
         Cursor cursor = requireContext().getContentResolver().query(
-                uri, projection, selection, null, MediaStore.Audio.Media.ALBUM + " ASC"
-        );
+                uri, projection, selection, null, MediaStore.Audio.Media.ALBUM + " ASC");
 
         if (cursor != null) {
             while (cursor.moveToNext()) {
@@ -217,7 +207,8 @@ public class AlbumsFragment extends Fragment {
         AutoHideScrollHelper.attach(gridView, getActivity(), null);
 
         gridView.setOnItemClickListener((parent, view, position, id) -> {
-            if (position < 0 || position >= albums.size()) return;
+            if (position < 0 || position >= albums.size())
+                return;
             Intent intent = new Intent(getContext(), GroupSongsActivity.class);
             intent.putExtra("type", "album");
             intent.putExtra("name", albums.get(position).name);
@@ -226,7 +217,10 @@ public class AlbumsFragment extends Fragment {
     }
 
     private void filterAlbums(String query) {
-        currentQuery = query != null ? query : "";
+        String next = query != null ? query : "";
+        if (next.equals(currentQuery))
+            return;
+        currentQuery = next;
         applyAlbumFilter();
         if (adapter != null) {
             adapter.notifyDataSetChanged();

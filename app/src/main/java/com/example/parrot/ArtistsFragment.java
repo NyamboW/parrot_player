@@ -11,8 +11,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.LayoutInflater;
-import android.view.Menu;
-import android.view.MenuInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -63,12 +61,6 @@ public class ArtistsFragment extends Fragment {
         }
     };
 
-    @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setHasOptionsMenu(true);
-    }
-
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
@@ -79,18 +71,15 @@ public class ArtistsFragment extends Fragment {
     }
 
     @Override
-    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
-        currentQuery = "";
-        filterArtists("");
-        ToolbarSearchHelper.setupSearchMenu(
-                requireContext(),
-                menu,
-                inflater,
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        ToolbarSearchHelper.attachFragmentSearchMenu(
+                this,
                 R.menu.menu_search,
                 "Search artists...",
-                this::filterArtists
+                this::filterArtists,
+                null
         );
-        super.onCreateOptionsMenu(menu, inflater);
     }
 
     @Override
@@ -240,7 +229,9 @@ public class ArtistsFragment extends Fragment {
     }
 
     private void filterArtists(String query) {
-        currentQuery = query != null ? query : "";
+        String next = query != null ? query : "";
+        if (next.equals(currentQuery)) return;
+        currentQuery = next;
         applyArtistFilter();
         if (adapter != null) {
             adapter.notifyDataSetChanged();

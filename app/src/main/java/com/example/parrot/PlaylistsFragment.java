@@ -16,8 +16,6 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.view.LayoutInflater;
-import android.view.Menu;
-import android.view.MenuInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -70,7 +68,6 @@ public class PlaylistsFragment extends Fragment {
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setHasOptionsMenu(true);
         m3uImportLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
@@ -112,18 +109,15 @@ public class PlaylistsFragment extends Fragment {
     }
 
     @Override
-    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
-        currentQuery = "";
-        filterPlaylists("");
-        ToolbarSearchHelper.setupSearchMenu(
-                requireContext(),
-                menu,
-                inflater,
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        ToolbarSearchHelper.attachFragmentSearchMenu(
+                this,
                 R.menu.menu_search,
                 "Search playlists...",
-                this::filterPlaylists
+                this::filterPlaylists,
+                null
         );
-        super.onCreateOptionsMenu(menu, inflater);
     }
 
     @Override
@@ -353,7 +347,9 @@ public class PlaylistsFragment extends Fragment {
     }
 
     private void filterPlaylists(String query) {
-        currentQuery = query != null ? query : "";
+        String next = query != null ? query : "";
+        if (next.equals(currentQuery)) return;
+        currentQuery = next;
         applyPlaylistFilter();
         if (adapter != null) {
             adapter.notifyDataSetChanged();

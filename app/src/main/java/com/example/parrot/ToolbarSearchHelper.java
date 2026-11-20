@@ -15,6 +15,9 @@ import androidx.annotation.MenuRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.SearchView;
+import androidx.core.view.MenuProvider;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.Lifecycle;
 
 /**
  * Shared toolbar SearchView setup for fragments and activities to keep dark-theme styling
@@ -27,6 +30,34 @@ public final class ToolbarSearchHelper {
     }
 
     private ToolbarSearchHelper() {}
+
+    /**
+     * Attaches an options menu strictly while the Fragment is RESUMED so ViewPager2 offscreen tabs
+     * never stack duplicate Search/Sort icons onto the shared toolbar.
+     */
+    public static void attachFragmentSearchMenu(@NonNull Fragment fragment,
+                                                @MenuRes int menuResId,
+                                                @NonNull String hint,
+                                                @NonNull QueryListener listener,
+                                                @Nullable Runnable onSortSelected) {
+        fragment.requireActivity().addMenuProvider(new MenuProvider() {
+            @Override
+            public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater menuInflater) {
+                menu.clear();
+                listener.onQueryChanged("");
+                setupSearchMenu(fragment.requireContext(), menu, menuInflater, menuResId, hint, listener);
+            }
+
+            @Override
+            public boolean onMenuItemSelected(@NonNull MenuItem menuItem) {
+                if (menuItem.getItemId() == R.id.item_sort && onSortSelected != null) {
+                    onSortSelected.run();
+                    return true;
+                }
+                return false;
+            }
+        }, fragment.getViewLifecycleOwner(), Lifecycle.State.RESUMED);
+    }
 
     public static void setupSearchMenu(@NonNull Context context,
                                        @NonNull Menu menu,
