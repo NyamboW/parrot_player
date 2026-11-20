@@ -11,4 +11,12 @@
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="dummy_button">Dummy Button</string>
     <string name="dummy_content">DUMMY\nCONTENT</string>
+    <string name="shortcut_shuffle_short">Shuffle All</string>
+    <string name="shortcut_shuffle_long">Shuffle All Tracks</string>
+    <string name="shortcut_search_short">Search</string>
+    <string name="shortcut_search_long">Search Music</string>
+    <string name="shortcut_favorites_short">Favorites</string>
+    <string name="shortcut_favorites_long">Open Favorites</string>
+    <string name="shortcut_recent_short">Recent</string>
+    <string name="shortcut_recent_long">Recently Played</string>
 </resources>

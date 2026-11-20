@@ -234,6 +234,32 @@ public final class MusicFolderHelper {
         builder.show();
     }
 
+    /**
+     * Queries all existing audio tracks inside the user's allowed music folders.
+     */
+    public static ArrayList<String> getAllAllowedSongs(Context context) {
+        ArrayList<String> songs = new ArrayList<>();
+        if (context == null || !PermissionHelper.hasAudioPermission(context)) {
+            return songs;
+        }
+        try (Cursor cursor = context.getContentResolver().query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                new String[]{MediaStore.Audio.Media.DATA},
+                MediaStore.Audio.Media.IS_MUSIC + "!=0",
+                null,
+                MediaStore.Audio.Media.TITLE + " ASC")) {
+            if (cursor != null) {
+                while (cursor.moveToNext()) {
+                    String path = cursor.getString(0);
+                    if (path != null && isPathAllowed(context, path) && new File(path).exists()) {
+                        songs.add(path);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return songs;
+    }
+
     private static String shortenPath(String fullPath) {
         if (fullPath == null) return "";
         return fullPath.replaceFirst("^/storage/emulated/0", "/Internal");

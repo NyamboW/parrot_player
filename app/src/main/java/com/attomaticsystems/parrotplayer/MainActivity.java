@@ -49,8 +49,14 @@ import androidx.navigation.ui.NavigationUI;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Random;
 
 public class MainActivity extends AppCompatActivity implements AutoHideScrollHelper.ScrollBarController {
+
+    public static final String ACTION_SHORTCUT_SHUFFLE_ALL = "com.attomaticsystems.parrotplayer.SHORTCUT_SHUFFLE_ALL";
+    public static final String ACTION_SHORTCUT_SEARCH = "com.attomaticsystems.parrotplayer.SHORTCUT_SEARCH";
+    public static final String ACTION_SHORTCUT_FAVORITES = "com.attomaticsystems.parrotplayer.SHORTCUT_FAVORITES";
+    public static final String ACTION_SHORTCUT_RECENTLY_PLAYED = "com.attomaticsystems.parrotplayer.SHORTCUT_RECENTLY_PLAYED";
 
     private static final int COLOR_ACTIVE_TEXT = Color.WHITE;
     private static final int COLOR_INACTIVE_ITEM = Color.parseColor("#E0E3E8");
@@ -232,6 +238,134 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
 
         Intent bindIntent = new Intent(this, MusicService.class);
         bindService(bindIntent, serviceConnection, Context.BIND_AUTO_CREATE);
+
+        if (savedInstanceState == null) {
+            handleShortcutIntent(getIntent());
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleShortcutIntent(intent);
+    }
+
+    private void handleShortcutIntent(Intent intent) {
+        if (intent == null || intent.getAction() == null) return;
+        String action = intent.getAction();
+        if (!ACTION_SHORTCUT_SHUFFLE_ALL.equals(action)
+                && !ACTION_SHORTCUT_SEARCH.equals(action)
+                && !ACTION_SHORTCUT_FAVORITES.equals(action)
+                && !ACTION_SHORTCUT_RECENTLY_PLAYED.equals(action)) {
+            return;
+        }
+        // Clear handled shortcut action so screen rotations do not re-trigger it
+        intent.setAction(Intent.ACTION_MAIN);
+        if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            drawerLayout.closeDrawer(GravityCompat.START);
+        }
+
+        switch (action) {
+            case ACTION_SHORTCUT_SHUFFLE_ALL:
+                triggerShuffleAllShortcut();
+                break;
+            case ACTION_SHORTCUT_SEARCH:
+                openSearchShortcut();
+                break;
+            case ACTION_SHORTCUT_FAVORITES:
+                openFavoritesShortcut();
+                break;
+            case ACTION_SHORTCUT_RECENTLY_PLAYED:
+                openRecentlyPlayedShortcut();
+                break;
+        }
+    }
+
+    private NavHostFragment getMainNavHostFragment() {
+        Fragment f = getSupportFragmentManager().findFragmentById(R.id.navHostFragment);
+        return (f instanceof NavHostFragment) ? (NavHostFragment) f : null;
+    }
+
+    private void ensureHomeDestination() {
+        NavHostFragment navHost = getMainNavHostFragment();
+        if (navHost == null) return;
+        NavController navController = navHost.getNavController();
+        if (navController.getCurrentDestination() != null
+                && navController.getCurrentDestination().getId() != R.id.homeFragment) {
+            navController.popBackStack(R.id.homeFragment, false);
+        }
+    }
+
+    private void triggerShuffleAllShortcut() {
+        ensureHomeDestination();
+        if (!PermissionHelper.hasAudioPermission(this)) {
+            Toast.makeText(this, "Please allow audio permission first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new Thread(() -> {
+            ArrayList<String> songs = MusicFolderHelper.getAllAllowedSongs(MainActivity.this);
+            if (songs.isEmpty()) {
+                songs = new PlayerStateManager(MainActivity.this).restore().songs;
+            }
+            final ArrayList<String> finalSongs = songs;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (finalSongs.isEmpty()) {
+                    Toast.makeText(MainActivity.this, "No tracks found to shuffle", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                int startPos = new Random().nextInt(finalSongs.size());
+                MusicService.startPlaybackShuffled(MainActivity.this, finalSongs, startPos);
+                Toast.makeText(MainActivity.this,
+                        "Shuffling " + finalSongs.size() + " tracks", Toast.LENGTH_SHORT).show();
+            });
+        }).start();
+    }
+
+    private void openSearchShortcut() {
+        ensureHomeDestination();
+        setBarsVisible(true);
+        NavHostFragment navHost = getMainNavHostFragment();
+        if (navHost != null) {
+            for (Fragment child : navHost.getChildFragmentManager().getFragments()) {
+                if (child instanceof HomeFragment) {
+                    ((HomeFragment) child).selectTab(1);
+                    break;
+                }
+            }
+        }
+        expandToolbarSearchWithRetry(0);
+    }
+
+    private void expandToolbarSearchWithRetry(final int attempt) {
+        if (isFinishing() || isDestroyed() || toolbar == null) return;
+        toolbar.postDelayed(() -> {
+            if (isFinishing() || isDestroyed() || toolbar == null) return;
+            android.view.Menu menu = toolbar.getMenu();
+            android.view.MenuItem searchItem = menu != null ? menu.findItem(R.id.item_search) : null;
+            if (searchItem != null) {
+                searchItem.expandActionView();
+            } else if (attempt < 5) {
+                expandToolbarSearchWithRetry(attempt + 1);
+            }
+        }, attempt == 0 ? 180L : 140L);
+    }
+
+    private void openFavoritesShortcut() {
+        NavHostFragment navHost = getMainNavHostFragment();
+        if (navHost != null) {
+            navigateToDestination(navHost.getNavController(), R.id.menuFavourite);
+        }
+    }
+
+    private void openRecentlyPlayedShortcut() {
+        ensureHomeDestination();
+        Intent groupIntent = new Intent(this, GroupSongsActivity.class);
+        groupIntent.putExtra("type", "smart_playlist");
+        groupIntent.putExtra("smart_id", ListeningStatsManager.SMART_RECENTLY_PLAYED);
+        groupIntent.putExtra("name", "Recently Played");
+        startActivity(groupIntent);
     }
 
     private void setupCustomDrawer() {

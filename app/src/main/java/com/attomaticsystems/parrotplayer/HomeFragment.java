@@ -23,6 +23,8 @@ public class HomeFragment extends Fragment {
 
     private final String[] tabTitles = new String[]{"Artists", "Tracks", "Albums", "Playlists", "Favorites", "Folders"};
     private TabLayout tabLayout;
+    private ViewPager2 viewPager;
+    private int pendingTabIndex = -1;
 
     private final BroadcastReceiver accentReceiver = new BroadcastReceiver() {
         @Override
@@ -39,7 +41,7 @@ public class HomeFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_home, container, false);
 
         tabLayout = view.findViewById(R.id.tabLayout);
-        ViewPager2 viewPager = view.findViewById(R.id.viewPager);
+        viewPager = view.findViewById(R.id.viewPager);
 
         HomePagerAdapter adapter = new HomePagerAdapter(this);
         viewPager.setAdapter(adapter);
@@ -68,11 +70,25 @@ public class HomeFragment extends Fragment {
             }
         });
 
-        // Default to Tracks
-        viewPager.setCurrentItem(1, false);
+        // Default to Tracks (or pending shortcut tab if requested before view creation)
+        int initialTab = (pendingTabIndex >= 0 && pendingTabIndex < tabTitles.length) ? pendingTabIndex : 1;
+        pendingTabIndex = -1;
+        viewPager.setCurrentItem(initialTab, false);
         applyAccentColor();
 
         return view;
+    }
+
+    /**
+     * Switches the active Home tab (e.g. from launcher shortcuts).
+     */
+    public void selectTab(int index) {
+        if (index < 0 || index >= tabTitles.length) return;
+        if (viewPager != null) {
+            viewPager.setCurrentItem(index, false);
+        } else {
+            pendingTabIndex = index;
+        }
     }
 
     @Override

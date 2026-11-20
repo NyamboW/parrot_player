@@ -327,6 +327,12 @@ public class MusicService extends Service {
             switch (action) {
                 case ACTION_START:
                     isClosing = false;
+                    if (intent.hasExtra("shuffle")) {
+                        isShuffle = intent.getBooleanExtra("shuffle", isShuffle);
+                        if (stateManager != null) {
+                            stateManager.saveModes(isShuffle, repeatMode);
+                        }
+                    }
                     ArrayList<String> newSongs = intent.getStringArrayListExtra("songs");
                     if (newSongs != null) {
                         mySongs = newSongs;
@@ -416,6 +422,17 @@ public class MusicService extends Service {
      * Starts playing a track list directly in the service without opening full-screen PlayerActivity.
      */
     public static void startPlaybackList(Context context, ArrayList<String> songs, int pos) {
+        startPlaybackList(context, songs, pos, null);
+    }
+
+    /**
+     * Starts playing a track list directly in the service with shuffle enabled.
+     */
+    public static void startPlaybackShuffled(Context context, ArrayList<String> songs, int pos) {
+        startPlaybackList(context, songs, pos, Boolean.TRUE);
+    }
+
+    private static void startPlaybackList(Context context, ArrayList<String> songs, int pos, Boolean shuffleOverride) {
         if (context == null || songs == null || songs.isEmpty()) return;
         int safePos = Math.max(0, Math.min(pos, songs.size() - 1));
         String targetPath = songs.get(safePos);
@@ -426,6 +443,9 @@ public class MusicService extends Service {
         serviceIntent.setAction(ACTION_START);
         serviceIntent.putStringArrayListExtra("songs", songs);
         serviceIntent.putExtra("pos", safePos);
+        if (shuffleOverride != null) {
+            serviceIntent.putExtra("shuffle", shuffleOverride);
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(serviceIntent);
         } else {
