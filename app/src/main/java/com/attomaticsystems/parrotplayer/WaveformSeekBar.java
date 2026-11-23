@@ -59,11 +59,14 @@ public class WaveformSeekBar extends AppCompatSeekBar {
     }
 
     private void init(Context context) {
-        // Hide default platform thumb and track drawables; we render custom Canvas waveform
+        // Hide default platform thumb, track, and touch ripple glow; we render custom Canvas waveform
         setThumb(null);
         setProgressDrawable(null);
         setBackground(null);
         setSplitTrack(false);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            setDefaultFocusHighlightEnabled(false);
+        }
 
         accentColor = AccentColorHelper.getAccentColor(context);
         barPaint.setStyle(Paint.Style.FILL);
@@ -232,19 +235,18 @@ public class WaveformSeekBar extends AppCompatSeekBar {
         float cornerRadius = barWidth / 2f;
 
         float exactBarPosition = progressRatio * BAR_COUNT;
-        int brightAccent = ColorUtils.blendARGB(accentColor, Color.WHITE, 0.25f);
 
         for (int i = 0; i < BAR_COUNT; i++) {
             float barCenterRatio = (i + 0.5f) / BAR_COUNT;
             float left = horizontalPad + i * slotWidth + (slotWidth - barWidth) * 0.5f;
             float right = left + barWidth;
 
-            // Magnetic wave boost near playhead while scrubbing
+            // Subtle magnetic wave lift near current position while scrubbing
             float distFromPlayhead = Math.abs((i + 0.5f) - exactBarPosition);
             float magneticBoost = 0f;
             if (scrubExpansion > 0.01f && distFromPlayhead < 3.2f) {
                 float factor = 1f - (distFromPlayhead / 3.2f);
-                magneticBoost = factor * factor * 0.22f * scrubExpansion;
+                magneticBoost = factor * factor * 0.18f * scrubExpansion;
             }
 
             float amp = Math.min(1f, barAmplitudes[i] + magneticBoost);
@@ -256,16 +258,15 @@ public class WaveformSeekBar extends AppCompatSeekBar {
                     && barCenterRatio >= abStartRatio && barCenterRatio <= abEndRatio);
 
             int unplayedBase = inAbLoop ? COLOR_AB_UNPLAYED : COLOR_UNPLAYED;
-            int playedBase = inAbLoop ? brightAccent : accentColor;
 
             float barFillFraction = exactBarPosition - i;
             if (barFillFraction >= 1f) {
-                barPaint.setColor(playedBase);
+                barPaint.setColor(accentColor);
             } else if (barFillFraction <= 0f) {
                 barPaint.setColor(unplayedBase);
             } else {
-                // Smoothly blend the active transition bar
-                int blended = ColorUtils.blendARGB(unplayedBase, brightAccent, barFillFraction);
+                // Only color transition between unplayed slate and accent color (no white glow or white line)
+                int blended = ColorUtils.blendARGB(unplayedBase, accentColor, barFillFraction);
                 barPaint.setColor(blended);
             }
 
@@ -273,42 +274,17 @@ public class WaveformSeekBar extends AppCompatSeekBar {
             canvas.drawRoundRect(barRect, cornerRadius, cornerRadius, barPaint);
         }
 
-        // Draw A-B loop marker pins if set
+        // Draw A-B loop marker pins in accent color if set
         if (abStartRatio >= 0f) {
             drawAbLoopPin(canvas, horizontalPad + abStartRatio * usableWidth, height, density);
         }
         if (abEndRatio > abStartRatio && abEndRatio >= 0f) {
             drawAbLoopPin(canvas, horizontalPad + abEndRatio * usableWidth, height, density);
         }
-
-        // Draw glowing vertical playhead capsule at current position
-        float playheadX = horizontalPad + progressRatio * usableWidth;
-        float playheadW = (2.6f + 1.2f * scrubExpansion) * density;
-        float playheadH = maxBarHeight + (3f + 3f * scrubExpansion) * density;
-        playheadH = Math.min(height - 2f * density, playheadH);
-
-        playheadPaint.setColor(ColorUtils.setAlphaComponent(accentColor, 90));
-        float glowW = playheadW + 4f * density;
-        barRect.set(
-                playheadX - glowW * 0.5f,
-                centerY - playheadH * 0.5f,
-                playheadX + glowW * 0.5f,
-                centerY + playheadH * 0.5f
-        );
-        canvas.drawRoundRect(barRect, glowW * 0.5f, glowW * 0.5f, playheadPaint);
-
-        playheadPaint.setColor(Color.WHITE);
-        barRect.set(
-                playheadX - playheadW * 0.5f,
-                centerY - playheadH * 0.5f,
-                playheadX + playheadW * 0.5f,
-                centerY + playheadH * 0.5f
-        );
-        canvas.drawRoundRect(barRect, playheadW * 0.5f, playheadW * 0.5f, playheadPaint);
     }
 
     private void drawAbLoopPin(Canvas canvas, float x, int height, float density) {
-        abMarkerPaint.setColor(ColorUtils.blendARGB(accentColor, Color.WHITE, 0.35f));
+        abMarkerPaint.setColor(accentColor);
         float lineW = 1.8f * density;
         barRect.set(x - lineW * 0.5f, 3f * density, x + lineW * 0.5f, height - 3f * density);
         canvas.drawRoundRect(barRect, lineW * 0.5f, lineW * 0.5f, abMarkerPaint);
