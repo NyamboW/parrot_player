@@ -361,11 +361,28 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
 
     private void openRecentlyPlayedShortcut() {
         ensureHomeDestination();
-        Intent groupIntent = new Intent(this, GroupSongsActivity.class);
-        groupIntent.putExtra("type", "smart_playlist");
-        groupIntent.putExtra("smart_id", ListeningStatsManager.SMART_RECENTLY_PLAYED);
-        groupIntent.putExtra("name", "Recently Played");
-        startActivity(groupIntent);
+        setBarsVisible(true);
+        NavHostFragment navHost = getMainNavHostFragment();
+        if (navHost != null) {
+            for (Fragment child : navHost.getChildFragmentManager().getFragments()) {
+                if (child instanceof HomeFragment) {
+                    ((HomeFragment) child).selectTab(HomeFragment.TAB_RECENTLY_PLAYED);
+                    return;
+                }
+            }
+        }
+        toolbar.postDelayed(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            NavHostFragment delayedHost = getMainNavHostFragment();
+            if (delayedHost != null) {
+                for (Fragment child : delayedHost.getChildFragmentManager().getFragments()) {
+                    if (child instanceof HomeFragment) {
+                        ((HomeFragment) child).selectTab(HomeFragment.TAB_RECENTLY_PLAYED);
+                        break;
+                    }
+                }
+            }
+        }, 120L);
     }
 
     private void setupCustomDrawer() {
@@ -623,9 +640,6 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
     private void refreshDrawerPlaylists() {
         if (playlistManager == null || drawerPlaylistsAdapter == null) return;
         drawerPlaylists.clear();
-        drawerPlaylists.add(new DrawerPlaylistEntry(true, ListeningStatsManager.SMART_RECENTLY_ADDED, "Recently Added"));
-        drawerPlaylists.add(new DrawerPlaylistEntry(true, ListeningStatsManager.SMART_MOST_PLAYED, "Most Played"));
-        drawerPlaylists.add(new DrawerPlaylistEntry(true, ListeningStatsManager.SMART_RECENTLY_PLAYED, "Recently Played"));
         for (String pl : playlistManager.getPlaylists()) {
             drawerPlaylists.add(new DrawerPlaylistEntry(false, null, pl));
         }

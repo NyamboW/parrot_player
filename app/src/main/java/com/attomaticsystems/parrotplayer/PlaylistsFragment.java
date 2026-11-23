@@ -148,14 +148,6 @@ public class PlaylistsFragment extends Fragment {
         allRowItems.clear();
         allRowItems.add(new PlaylistRowItem(true, false, null, "Create New Playlist", "Group your favourite tracks"));
 
-        // 3 Smart Auto-Playlists
-        allRowItems.add(new PlaylistRowItem(false, true,
-                ListeningStatsManager.SMART_RECENTLY_ADDED, "Recently Added", "Auto Playlist • "));
-        allRowItems.add(new PlaylistRowItem(false, true,
-                ListeningStatsManager.SMART_MOST_PLAYED, "Most Played", "Auto Playlist • "));
-        allRowItems.add(new PlaylistRowItem(false, true,
-                ListeningStatsManager.SMART_RECENTLY_PLAYED, "Recently Played", "Auto Playlist • "));
-
         // User-created custom playlists
         for (String plName : playlistManager.getPlaylists()) {
             allRowItems.add(new PlaylistRowItem(false, false, null, plName, ""));

@@ -21,7 +21,27 @@ import com.google.android.material.tabs.TabLayoutMediator;
 
 public class HomeFragment extends Fragment {
 
-    private final String[] tabTitles = new String[]{"Artists", "Tracks", "Albums", "Playlists", "Favorites", "Folders"};
+    public static final int TAB_ARTISTS = 0;
+    public static final int TAB_TRACKS = 1;
+    public static final int TAB_ALBUMS = 2;
+    public static final int TAB_PLAYLISTS = 3;
+    public static final int TAB_FAVORITES = 4;
+    public static final int TAB_MOST_PLAYED = 5;
+    public static final int TAB_RECENTLY_PLAYED = 6;
+    public static final int TAB_RECENTLY_ADDED = 7;
+    public static final int TAB_FOLDERS = 8;
+
+    private final String[] tabTitles = new String[]{
+            "Artists",
+            "Tracks",
+            "Albums",
+            "Playlists",
+            "Favorites",
+            "Most Played",
+            "Recently Played",
+            "Recently Added",
+            "Folders"
+    };
     private TabLayout tabLayout;
     private ViewPager2 viewPager;
     private int pendingTabIndex = -1;
@@ -127,17 +147,23 @@ public class HomeFragment extends Fragment {
         @Override
         public Fragment createFragment(int position) {
             switch (position) {
-                case 0:
+                case TAB_ARTISTS:
                     return new ArtistsFragment();
-                case 1:
+                case TAB_TRACKS:
                     return new Music_Fragment();
-                case 2:
+                case TAB_ALBUMS:
                     return new AlbumsFragment();
-                case 3:
+                case TAB_PLAYLISTS:
                     return new PlaylistsFragment();
-                case 4:
+                case TAB_FAVORITES:
                     return new FavFragment();
-                case 5:
+                case TAB_MOST_PLAYED:
+                    return SmartCategoryFragment.newInstance(ListeningStatsManager.SMART_MOST_PLAYED);
+                case TAB_RECENTLY_PLAYED:
+                    return SmartCategoryFragment.newInstance(ListeningStatsManager.SMART_RECENTLY_PLAYED);
+                case TAB_RECENTLY_ADDED:
+                    return SmartCategoryFragment.newInstance(ListeningStatsManager.SMART_RECENTLY_ADDED);
+                case TAB_FOLDERS:
                     return new FoldersFragment();
                 default:
                     return new Music_Fragment();
