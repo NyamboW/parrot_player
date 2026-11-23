@@ -350,14 +350,13 @@
                 android:textSize="11sp" />
         </LinearLayout>
 
-        <!-- SeekBar -->
-        <SeekBar
+        <!-- Waveform SeekBar -->
+        <com.attomaticsystems.parrotplayer.WaveformSeekBar
             android:id="@+id/seekBar"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:progressBackgroundTint="#444"
-            android:progressTint="#4CAF50"
-            android:thumbTint="#FFFFFF" />
+            android:layout_height="44dp"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp" />
 
         <LinearLayout
             android:layout_width="match_parent"

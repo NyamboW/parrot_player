@@ -178,6 +178,9 @@ public class PlayerActivity extends AppCompatActivity {
 
                 if (songPath != null) {
                     currentSongPath = songPath;
+                    if (seekBar instanceof WaveformSeekBar) {
+                        ((WaveformSeekBar) seekBar).setSongKey(songPath);
+                    }
                     updateFavIcon(false);
                     loadTrackMetadata(songPath);
                     loadLyricsForSong(songPath);
@@ -279,6 +282,9 @@ public class PlayerActivity extends AppCompatActivity {
 
                 setSongTitle(cleanFileName(new File(initialSongPath).getName()));
                 currentSongPath = initialSongPath;
+                if (seekBar instanceof WaveformSeekBar) {
+                    ((WaveformSeekBar) seekBar).setSongKey(initialSongPath);
+                }
                 updateFavIcon(false);
                 updateTrackCounter(1, position, mySongs.size());
                 loadTrackMetadata(initialSongPath);
@@ -472,6 +478,9 @@ public class PlayerActivity extends AppCompatActivity {
 
         if (songPath != null) {
             currentSongPath = songPath;
+            if (seekBar instanceof WaveformSeekBar) {
+                ((WaveformSeekBar) seekBar).setSongKey(songPath);
+            }
             updateFavIcon(false);
             updateTrackCounter(
                     musicService.getPlayOrderNumber(),
@@ -792,6 +801,9 @@ public class PlayerActivity extends AppCompatActivity {
         float density = getResources().getDisplayMetrics().density;
         int startMs = (isBound && musicService != null) ? musicService.getAbLoopStartMs() : -1;
         int endMs = (isBound && musicService != null) ? musicService.getAbLoopEndMs() : -1;
+        if (seekBar instanceof WaveformSeekBar) {
+            ((WaveformSeekBar) seekBar).setAbLoopRange(startMs, endMs);
+        }
 
         if (startMs >= 0 && endMs > startMs) {
             txtAbLoopPill.setText("A–B: " + formatTime(startMs) + "–" + formatTime(endMs) + " ✕");
