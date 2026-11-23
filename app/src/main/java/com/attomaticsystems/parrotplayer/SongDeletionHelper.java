@@ -111,13 +111,17 @@ public class SongDeletionHelper {
                         ? "Are you sure you want to permanently delete this song from your device?"
                         : "Are you sure you want to permanently delete " + validPaths.size() + " songs from your device?";
 
-                new AlertDialog.Builder(ctx)
-                        .setTitle(title)
-                        .setMessage(message)
-                        .setPositiveButton("Delete", (dialog, which) ->
-                                executeLegacyOrApi29Delete(ctx, validPaths, onComplete))
-                        .setNegativeButton("Cancel", null)
-                        .show();
+                ParrotModalHelper.showConfirmDialog(
+                        ctx,
+                        title,
+                        message,
+                        "Delete",
+                        "Cancel",
+                        true,
+                        () -> executeLegacyOrApi29Delete(ctx, validPaths, onComplete),
+                        null,
+                        null
+                );
             }
         });
     }

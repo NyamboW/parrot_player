@@ -652,40 +652,43 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
     }
 
     private void showCreatePlaylistDialogFromDrawer() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Create New Playlist");
-
-        final EditText input = new EditText(this);
-        input.setHint("Playlist name");
-        builder.setView(input);
-
-        builder.setPositiveButton("Create", (dialog, which) -> {
-            String name = input.getText().toString().trim();
-            if (!name.isEmpty()) {
-                playlistManager.createPlaylist(name);
-                selectedDrawerPlaylist = name;
-                refreshDrawerPlaylists();
-                Toast.makeText(this, "Playlist '" + name + "' created", Toast.LENGTH_SHORT).show();
-            }
-        });
-        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
-        builder.show();
+        ParrotModalHelper.showTextInputDialog(
+                this,
+                "Create New Playlist",
+                "Enter a name for your new playlist",
+                "Playlist name",
+                null,
+                "Create",
+                null,
+                null,
+                name -> {
+                    playlistManager.createPlaylist(name);
+                    selectedDrawerPlaylist = name;
+                    refreshDrawerPlaylists();
+                    Toast.makeText(this, "Playlist '" + name + "' created", Toast.LENGTH_SHORT).show();
+                }
+        );
     }
 
     private void confirmDeletePlaylist(String playlistName) {
-        new AlertDialog.Builder(this)
-                .setTitle("Delete Playlist")
-                .setMessage("Are you sure you want to delete '" + playlistName + "'?")
-                .setPositiveButton("Yes", (dialog, which) -> {
+        ParrotModalHelper.showConfirmDialog(
+                this,
+                "Delete Playlist",
+                "Are you sure you want to delete '" + playlistName + "'?",
+                "Delete",
+                "Cancel",
+                true,
+                () -> {
                     playlistManager.deletePlaylist(playlistName);
                     if (playlistName.equals(selectedDrawerPlaylist)) {
                         selectedDrawerPlaylist = null;
                     }
                     refreshDrawerPlaylists();
                     Toast.makeText(this, "Playlist deleted", Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton("No", null)
-                .show();
+                },
+                null,
+                null
+        );
     }
 
     private void openSoundEffectsDialog() {

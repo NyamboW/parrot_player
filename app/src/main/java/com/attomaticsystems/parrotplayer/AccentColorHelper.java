@@ -183,15 +183,16 @@ public final class AccentColorHelper {
             }
         };
 
-        new AlertDialog.Builder(context)
-                .setTitle("Choose Accent Color")
-                .setAdapter(adapter, (dialog, which) -> {
+        ParrotModalHelper.showCustomAdapterDialog(
+                context,
+                "Choose Accent Color",
+                adapter,
+                which -> {
                     setAccentColor(context, PRESET_COLORS[which]);
                     if (onColorSelected != null) {
                         onColorSelected.run();
                     }
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+                }
+        );
     }
 }

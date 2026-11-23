@@ -295,16 +295,21 @@ public class PlaylistsFragment extends Fragment {
             if (item.isSmartPlaylist) {
                 if (ListeningStatsManager.SMART_MOST_PLAYED.equals(item.smartId)
                         || ListeningStatsManager.SMART_RECENTLY_PLAYED.equals(item.smartId)) {
-                    new AlertDialog.Builder(requireContext())
-                            .setTitle("Reset " + item.displayName)
-                            .setMessage("Clear all tracked history for '" + item.displayName + "'?")
-                            .setPositiveButton("Reset", (dialog, which) -> {
+                    ParrotModalHelper.showConfirmDialog(
+                            requireContext(),
+                            "Reset " + item.displayName,
+                            "Clear all tracked history for '" + item.displayName + "'?",
+                            "Reset",
+                            "Cancel",
+                            true,
+                            () -> {
                                 ListeningStatsManager.clearSmartPlaylistStats(requireContext(), item.smartId);
                                 loadPlaylists();
                                 Toast.makeText(getContext(), item.displayName + " reset", Toast.LENGTH_SHORT).show();
-                            })
-                            .setNegativeButton("Cancel", null)
-                            .show();
+                            },
+                            null,
+                            null
+                    );
                     return true;
                 }
                 return false;
@@ -316,9 +321,12 @@ public class PlaylistsFragment extends Fragment {
                     "Rename Playlist",
                     "Delete Playlist"
             };
-            new AlertDialog.Builder(requireContext())
-                    .setTitle(playlistName)
-                    .setItems(options, (dialog, which) -> {
+            ParrotModalHelper.showSingleChoiceDialog(
+                    requireContext(),
+                    playlistName,
+                    options,
+                    -1,
+                    which -> {
                         if (which == 0) {
                             File out = playlistManager.exportPlaylistToM3u(requireContext(), playlistName);
                             if (out != null) {
@@ -329,19 +337,24 @@ public class PlaylistsFragment extends Fragment {
                         } else if (which == 1) {
                             showRenamePlaylistDialog(playlistName);
                         } else if (which == 2) {
-                            new AlertDialog.Builder(requireContext())
-                                    .setTitle("Delete Playlist")
-                                    .setMessage("Are you sure you want to delete '" + playlistName + "'?")
-                                    .setPositiveButton("Yes", (d, w) -> {
+                            ParrotModalHelper.showConfirmDialog(
+                                    requireContext(),
+                                    "Delete Playlist",
+                                    "Are you sure you want to delete '" + playlistName + "'?",
+                                    "Delete",
+                                    "Cancel",
+                                    true,
+                                    () -> {
                                         playlistManager.deletePlaylist(playlistName);
                                         loadPlaylists();
                                         Toast.makeText(getContext(), "Playlist deleted", Toast.LENGTH_SHORT).show();
-                                    })
-                                    .setNegativeButton("No", null)
-                                    .show();
+                                    },
+                                    null,
+                                    null
+                            );
                         }
-                    })
-                    .show();
+                    }
+            );
             return true;
         });
     }
@@ -369,21 +382,22 @@ public class PlaylistsFragment extends Fragment {
     }
 
     private void showRenamePlaylistDialog(final String oldName) {
-        final EditText input = new EditText(requireContext());
-        input.setText(oldName);
-        input.setSelection(oldName.length());
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Rename Playlist")
-                .setView(input)
-                .setPositiveButton("Rename", (dialog, which) -> {
-                    String newName = input.getText().toString().trim();
+        ParrotModalHelper.showTextInputDialog(
+                requireContext(),
+                "Rename Playlist",
+                "Update name for '" + oldName + "'",
+                "Playlist name",
+                oldName,
+                "Rename",
+                null,
+                null,
+                newName -> {
                     if (playlistManager.renamePlaylist(oldName, newName)) {
                         loadPlaylists();
                         Toast.makeText(getContext(), "Renamed to '" + newName + "'", Toast.LENGTH_SHORT).show();
                     }
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+                }
+        );
     }
 
     private void setDefaultPlaylistIcon(ImageView imgCover, int padPx, int tintColor) {
@@ -393,23 +407,20 @@ public class PlaylistsFragment extends Fragment {
     }
 
     private void showCreatePlaylistDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
-        builder.setTitle("Create New Playlist");
-
-        final EditText input = new EditText(requireContext());
-        input.setHint("Playlist name");
-        builder.setView(input);
-
-        builder.setPositiveButton("Create", (dialog, which) -> {
-            String name = input.getText().toString().trim();
-            if (!name.isEmpty()) {
-                playlistManager.createPlaylist(name);
-                loadPlaylists();
-            }
-        });
-        builder.setNeutralButton("Import .M3U File", (dialog, which) -> launchM3uFilePicker());
-        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
-        builder.show();
+        ParrotModalHelper.showTextInputDialog(
+                requireContext(),
+                "Create New Playlist",
+                "Enter a name or import an existing .M3U playlist",
+                "Playlist name",
+                null,
+                "Create",
+                "Import .M3U File",
+                this::launchM3uFilePicker,
+                name -> {
+                    playlistManager.createPlaylist(name);
+                    loadPlaylists();
+                }
+        );
     }
 
     private void launchM3uFilePicker() {

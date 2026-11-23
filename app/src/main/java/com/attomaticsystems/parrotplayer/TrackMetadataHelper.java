@@ -312,10 +312,16 @@ public final class TrackMetadataHelper {
                 + "\nFile Size: " + info.getFormattedFileSize()
                 + "\n\nPath:\n" + info.filePath;
 
-        new AlertDialog.Builder(context)
-                .setTitle("Track Details")
-                .setMessage(details)
-                .setPositiveButton("Close", null)
-                .show();
+        ParrotModalHelper.showConfirmDialog(
+                context,
+                "Track Details",
+                details,
+                "Close",
+                null,
+                false,
+                null,
+                null,
+                null
+        );
     }
 }

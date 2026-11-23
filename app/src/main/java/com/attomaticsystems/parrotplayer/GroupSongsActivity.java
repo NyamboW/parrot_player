@@ -620,13 +620,19 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
             labels[i] = folderName + " (" + count + (count == 1 ? " track)\n" : " tracks)\n") + shortPath;
         }
 
-        new AlertDialog.Builder(this)
-                .setTitle("Import Songs from Folder")
-                .setMultiChoiceItems(labels, checked, (dialog, which, isChecked) -> checked[which] = isChecked)
-                .setPositiveButton("Import Selected", (dialog, which) -> {
+        ParrotModalHelper.showMultiChoiceDialog(
+                this,
+                "Import Songs from Folder",
+                labels,
+                checked,
+                "Import Selected",
+                "Browse Storage...",
+                this::launchSystemFolderPicker,
+                true,
+                resultChecked -> {
                     ArrayList<String> toImport = new ArrayList<>();
                     for (int i = 0; i < folderPaths.length; i++) {
-                        if (checked[i]) {
+                        if (resultChecked[i]) {
                             ArrayList<String> songsInFolder = folderToSongs.get(folderPaths[i]);
                             if (songsInFolder != null) {
                                 toImport.addAll(songsInFolder);
@@ -641,10 +647,8 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
                     pm.addSongsToPlaylist(groupName, toImport);
                     loadGroupSongs(groupType, groupName);
                     Toast.makeText(this, "Imported " + toImport.size() + " tracks into " + groupName, Toast.LENGTH_SHORT).show();
-                })
-                .setNeutralButton("Browse Storage...", (dialog, which) -> launchSystemFolderPicker())
-                .setNegativeButton("Cancel", null)
-                .show();
+                }
+        );
     }
 
     private void launchSystemFolderPicker() {
@@ -793,13 +797,19 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
         String[] labelArray = allLabels.toArray(new String[0]);
         boolean[] checked = new boolean[labelArray.length];
 
-        new AlertDialog.Builder(this)
-                .setTitle("Add Songs to " + groupName)
-                .setMultiChoiceItems(labelArray, checked, (dialog, which, isChecked) -> checked[which] = isChecked)
-                .setPositiveButton("Add Selected", (dialog, which) -> {
+        ParrotModalHelper.showMultiChoiceDialog(
+                this,
+                "Add Songs to " + groupName,
+                labelArray,
+                checked,
+                "Add Selected",
+                null,
+                null,
+                true,
+                resultChecked -> {
                     ArrayList<String> selected = new ArrayList<>();
-                    for (int i = 0; i < checked.length; i++) {
-                        if (checked[i]) {
+                    for (int i = 0; i < resultChecked.length; i++) {
+                        if (resultChecked[i]) {
                             selected.add(allPaths.get(i));
                         }
                     }
@@ -809,9 +819,8 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
                         loadGroupSongs(groupType, groupName);
                         Toast.makeText(this, "Added " + selected.size() + " tracks to " + groupName, Toast.LENGTH_SHORT).show();
                     }
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+                }
+        );
     }
 
     private abstract static class IndexedGroupAdapter extends BaseAdapter implements SectionIndexer {}
@@ -984,38 +993,10 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
     }
 
     private void showAddMultipleToPlaylistDialog(ArrayList<String> songPaths) {
-        PlaylistManager playlistManager = new PlaylistManager(this);
-        ArrayList<String> playlists = playlistManager.getPlaylists();
-        ArrayList<String> options = new ArrayList<>();
-        options.add("+ Create New Playlist");
-        options.addAll(playlists);
-
-        String[] playlistArray = options.toArray(new String[0]);
-        new AlertDialog.Builder(this)
-                .setTitle("Add to Playlist")
-                .setItems(playlistArray, (dialog, which) -> {
-                    if (which == 0) {
-                        final EditText input = new EditText(this);
-                        input.setHint("Playlist name");
-                        new AlertDialog.Builder(this)
-                                .setTitle("Create New Playlist")
-                                .setView(input)
-                                .setPositiveButton("Create & Add", (d, w) -> {
-                                    String name = input.getText().toString().trim();
-                                    if (!name.isEmpty()) {
-                                        playlistManager.createPlaylist(name);
-                                        playlistManager.addSongsToPlaylist(name, songPaths);
-                                        Toast.makeText(this, songPaths.size() + " added to " + name, Toast.LENGTH_SHORT).show();
-                                    }
-                                })
-                                .setNegativeButton("Cancel", null)
-                                .show();
-                    } else {
-                        String selectedPlaylist = playlistArray[which];
-                        playlistManager.addSongsToPlaylist(selectedPlaylist, songPaths);
-                        Toast.makeText(this, songPaths.size() + " added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .show();
+        ParrotModalHelper.showAddToPlaylistDialog(this, songPaths, () -> {
+            if ("playlist".equals(groupType)) {
+                loadGroupSongs(groupType, groupName);
+            }
+        });
     }
 }

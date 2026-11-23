@@ -194,44 +194,40 @@ public final class MusicFolderHelper {
             checkedItems[0] = true;
         }
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        builder.setTitle(isFirstRun ? "Choose Music Folders" : "Select Music Folders");
-        builder.setMultiChoiceItems(displayLabels, checkedItems, (dialog, which, isChecked) -> {
-            checkedItems[which] = isChecked;
-        });
+        ParrotModalHelper.showMultiChoiceDialog(
+                context,
+                isFirstRun ? "Choose Music Folders" : "Select Music Folders",
+                displayLabels,
+                checkedItems,
+                "Save",
+                null,
+                null,
+                !isFirstRun,
+                resultChecked -> {
+                    Set<String> selectedFolders = new HashSet<>();
+                    for (int i = 0; i < folderPaths.length; i++) {
+                        if (resultChecked[i]) {
+                            selectedFolders.add(folderPaths[i]);
+                        }
+                    }
+                    prefs.edit()
+                            .putStringSet(KEY_MUSIC_FOLDERS, selectedFolders)
+                            .putBoolean(KEY_FOLDERS_CONFIGURED, true)
+                            .apply();
 
-        builder.setPositiveButton("Save", (dialog, which) -> {
-            Set<String> selectedFolders = new HashSet<>();
-            for (int i = 0; i < folderPaths.length; i++) {
-                if (checkedItems[i]) {
-                    selectedFolders.add(folderPaths[i]);
+                    Intent broadcast = new Intent(ACTION_FOLDERS_UPDATED);
+                    broadcast.setPackage(context.getPackageName());
+                    context.sendBroadcast(broadcast);
+
+                    Toast.makeText(context,
+                            "Scanning " + selectedFolders.size() + (selectedFolders.size() == 1 ? " music folder" : " music folders"),
+                            Toast.LENGTH_SHORT).show();
+
+                    if (onFoldersSaved != null) {
+                        onFoldersSaved.run();
+                    }
                 }
-            }
-            prefs.edit()
-                    .putStringSet(KEY_MUSIC_FOLDERS, selectedFolders)
-                    .putBoolean(KEY_FOLDERS_CONFIGURED, true)
-                    .apply();
-
-            Intent broadcast = new Intent(ACTION_FOLDERS_UPDATED);
-            broadcast.setPackage(context.getPackageName());
-            context.sendBroadcast(broadcast);
-
-            Toast.makeText(context,
-                    "Scanning " + selectedFolders.size() + (selectedFolders.size() == 1 ? " music folder" : " music folders"),
-                    Toast.LENGTH_SHORT).show();
-
-            if (onFoldersSaved != null) {
-                onFoldersSaved.run();
-            }
-        });
-
-        if (!isFirstRun) {
-            builder.setNegativeButton("Cancel", null);
-        } else {
-            builder.setCancelable(false);
-        }
-
-        builder.show();
+        );
     }
 
     /**

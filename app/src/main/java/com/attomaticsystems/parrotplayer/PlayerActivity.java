@@ -722,9 +722,12 @@ public class PlayerActivity extends AppCompatActivity {
                     "Go to Album: " + currentTrackInfo.album,
                     "Track Technical Info"
             };
-            new android.app.AlertDialog.Builder(this)
-                    .setTitle(currentTrackInfo.title)
-                    .setItems(choices, (dialog, which) -> {
+            ParrotModalHelper.showSingleChoiceDialog(
+                    this,
+                    currentTrackInfo.title,
+                    choices,
+                    -1,
+                    which -> {
                         if (which == 0) {
                             openGroupSongs("artist", currentTrackInfo.artist);
                         } else if (which == 1) {
@@ -732,8 +735,8 @@ public class PlayerActivity extends AppCompatActivity {
                         } else {
                             TrackMetadataHelper.showTrackDetailsDialog(this, currentTrackInfo);
                         }
-                    })
-                    .show();
+                    }
+            );
         } else if (hasArtist) {
             openGroupSongs("artist", currentTrackInfo.artist);
         } else if (hasAlbum) {

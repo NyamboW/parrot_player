@@ -72,31 +72,39 @@ public class AboutUsFragment extends Fragment {
 
     private void showChangelogDialog() {
         if (!isAdded()) return;
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Parrot Change Log")
-                .setMessage(
-                        "• Custom 5-Band Equalizer, Bass Boost & Room Reverb\n"
-                                + "• Synchronized LRC & Embedded Lyrics Viewer\n"
-                                + "• 3-State Repeat (Off / All / One) & A–B Section Loop\n"
-                                + "• Non-Repeating Fisher-Yates Shuffle & Track Counter\n"
-                                + "• Smart Music Folders, M3U Import/Export & Queue Reorder\n"
-                                + "• Swipe-Down Mini-Player & Auto-Hide Library Bars\n"
-                                + "• Dynamic Accent Color Themes"
-                )
-                .setPositiveButton("Close", null)
-                .show();
+        ParrotModalHelper.showConfirmDialog(
+                requireContext(),
+                "Parrot Change Log",
+                "• Custom 5-Band Equalizer, Bass Boost & Room Reverb\n"
+                        + "• Synchronized LRC & Embedded Lyrics Viewer\n"
+                        + "• 3-State Repeat (Off / All / One) & A–B Section Loop\n"
+                        + "• Non-Repeating Fisher-Yates Shuffle & Track Counter\n"
+                        + "• Smart Music Folders, M3U Import/Export & Queue Reorder\n"
+                        + "• Swipe-Down Mini-Player & Auto-Hide Library Bars\n"
+                        + "• Dynamic Accent Color Themes",
+                "Close",
+                null,
+                false,
+                null,
+                null,
+                null
+        );
     }
 
     private void showPrivacyDialog() {
         if (!isAdded()) return;
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Privacy & Offline Policy")
-                .setMessage(
-                        "Parrot Audio Player by attomaticsystems operates completely offline on your device.\n\n"
-                                + "• No analytics, tracking, or advertisements.\n"
-                                + "• Audio, storage, and notification permissions are used solely to scan, play, organize, and delete your local music files as requested."
-                )
-                .setPositiveButton("OK", null)
-                .show();
+        ParrotModalHelper.showConfirmDialog(
+                requireContext(),
+                "Privacy & Offline Policy",
+                "Parrot Audio Player by attomaticsystems operates completely offline on your device.\n\n"
+                        + "• No analytics, tracking, or advertisements.\n"
+                        + "• Audio, storage, and notification permissions are used solely to scan, play, organize, and delete your local music files as requested.",
+                "OK",
+                null,
+                false,
+                null,
+                null,
+                null
+        );
     }
 }

@@ -96,10 +96,14 @@ public final class SongMenuActionsHelper {
 
     public static void setAsRingtone(final Context context, final String songPath) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.System.canWrite(context)) {
-            new AlertDialog.Builder(context)
-                    .setTitle("Allow System Settings Access")
-                    .setMessage("To set a song as your phone's ringtone, please allow Parrot to modify system settings.")
-                    .setPositiveButton("Open Settings", (dialog, which) -> {
+            ParrotModalHelper.showConfirmDialog(
+                    context,
+                    "Allow System Settings Access",
+                    "To set a song as your phone's ringtone, please allow Parrot to modify system settings.",
+                    "Open Settings",
+                    "Cancel",
+                    false,
+                    () -> {
                         try {
                             Intent intent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS);
                             intent.setData(Uri.parse("package:" + context.getPackageName()));
@@ -107,9 +111,10 @@ public final class SongMenuActionsHelper {
                         } catch (Exception e) {
                             Toast.makeText(context, "Unable to open settings", Toast.LENGTH_SHORT).show();
                         }
-                    })
-                    .setNegativeButton("Cancel", null)
-                    .show();
+                    },
+                    null,
+                    null
+            );
             return;
         }
 

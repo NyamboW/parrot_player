@@ -630,9 +630,12 @@ public class Music_Fragment extends Fragment {
 
     private void showSortDialog() {
         if (!isAdded()) return;
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Sort Tracks By")
-                .setSingleChoiceItems(SORT_LABELS, currentSortMode, (dialog, which) -> {
+        ParrotModalHelper.showSingleChoiceDialog(
+                requireContext(),
+                "Sort Tracks By",
+                SORT_LABELS,
+                currentSortMode,
+                which -> {
                     currentSortMode = which;
                     requireContext().getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE)
                             .edit()
@@ -640,10 +643,8 @@ public class Music_Fragment extends Fragment {
                             .apply();
                     updateSortOrderFromMode();
                     loadSongs();
-                    dialog.dismiss();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+                }
+        );
     }
 
     private void hideKeyboard(View anchor) {
@@ -667,38 +668,7 @@ public class Music_Fragment extends Fragment {
     }
 
     private void showAddMultipleToPlaylistDialog(ArrayList<String> songPaths) {
-        PlaylistManager playlistManager = new PlaylistManager(requireContext());
-        ArrayList<String> playlists = playlistManager.getPlaylists();
-        ArrayList<String> options = new ArrayList<>();
-        options.add("+ Create New Playlist");
-        options.addAll(playlists);
-
-        String[] playlistArray = options.toArray(new String[0]);
-        new android.app.AlertDialog.Builder(requireContext())
-            .setTitle("Add to Playlist")
-            .setItems(playlistArray, (dialog, which) -> {
-                if (which == 0) {
-                    final EditText input = new EditText(requireContext());
-                    input.setHint("Playlist name");
-                    new android.app.AlertDialog.Builder(requireContext())
-                        .setTitle("Create New Playlist")
-                        .setView(input)
-                        .setPositiveButton("Create & Add", (d, w) -> {
-                            String name = input.getText().toString().trim();
-                            if (!name.isEmpty()) {
-                                playlistManager.createPlaylist(name);
-                                playlistManager.addSongsToPlaylist(name, songPaths);
-                                Toast.makeText(getContext(), songPaths.size() + " added to " + name, Toast.LENGTH_SHORT).show();
-                            }
-                        })
-                        .setNegativeButton("Cancel", null)
-                        .show();
-                } else {
-                    String selectedPlaylist = playlistArray[which];
-                    playlistManager.addSongsToPlaylist(selectedPlaylist, songPaths);
-                    Toast.makeText(getContext(), songPaths.size() + " added to " + selectedPlaylist, Toast.LENGTH_SHORT).show();
-                }
-            })
-            .show();
+        if (!isAdded()) return;
+        ParrotModalHelper.showAddToPlaylistDialog(requireContext(), songPaths, null);
     }
 }

@@ -92,22 +92,22 @@ public class QueueBottomSheetFragment extends BottomSheetDialogFragment {
             Toast.makeText(getContext(), "Queue is empty", Toast.LENGTH_SHORT).show();
             return;
         }
-        final EditText input = new EditText(requireContext());
-        input.setHint("Playlist name");
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Save Queue as Playlist")
-                .setView(input)
-                .setPositiveButton("Save", (dialog, which) -> {
-                    String name = input.getText().toString().trim();
-                    if (!name.isEmpty()) {
-                        PlaylistManager pm = new PlaylistManager(requireContext());
-                        pm.createPlaylist(name);
-                        pm.addSongsToPlaylist(name, queue);
-                        Toast.makeText(getContext(), "Saved " + queue.size() + " tracks to '" + name + "'", Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+        ParrotModalHelper.showTextInputDialog(
+                requireContext(),
+                "Save Queue as Playlist",
+                "Save " + queue.size() + (queue.size() == 1 ? " queued track" : " queued tracks") + " into a playlist",
+                "Playlist name",
+                null,
+                "Save",
+                null,
+                null,
+                name -> {
+                    PlaylistManager pm = new PlaylistManager(requireContext());
+                    pm.createPlaylist(name);
+                    pm.addSongsToPlaylist(name, queue);
+                    Toast.makeText(getContext(), "Saved " + queue.size() + " tracks to '" + name + "'", Toast.LENGTH_SHORT).show();
+                }
+        );
     }
 
     private void refreshQueue() {

@@ -165,10 +165,14 @@ public final class PermissionHelper {
             if (act.isFinishing() || act.isDestroyed()) return;
         }
         settingsDialogShowing = true;
-        new AlertDialog.Builder(context)
-                .setTitle("Audio Permission Required")
-                .setMessage("Parrot needs permission to access your music files. Please grant Music & Audio access in App Settings.")
-                .setPositiveButton("Open Settings", (dialog, which) -> {
+        ParrotModalHelper.showConfirmDialog(
+                context,
+                "Audio Permission Required",
+                "Parrot needs permission to access your music files. Please grant Music & Audio access in App Settings.",
+                "Open Settings",
+                "Cancel",
+                false,
+                () -> {
                     settingsDialogShowing = false;
                     try {
                         Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
@@ -176,9 +180,9 @@ public final class PermissionHelper {
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         context.startActivity(intent);
                     } catch (Exception ignored) {}
-                })
-                .setNegativeButton("Cancel", (dialog, which) -> settingsDialogShowing = false)
-                .setOnCancelListener(d -> settingsDialogShowing = false)
-                .show();
+                },
+                () -> settingsDialogShowing = false,
+                d -> settingsDialogShowing = false
+        );
     }
 }
