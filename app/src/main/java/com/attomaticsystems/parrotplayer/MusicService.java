@@ -21,6 +21,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.view.KeyEvent;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
@@ -108,6 +109,8 @@ public class MusicService extends Service {
     private float activeVolumeEnvelope = 1.0f;
     private int crossfadeSeconds = 0;
     private boolean skipSilence = false;
+    private boolean stopAfterCurrentTrack = false;
+    private int headsetClickCount = 0;
     private long sleepTimerEndElapsedMs = 0L;
     private MediaPlayer fadingOutPlayer;
     private boolean crossfadeTriggered = false;
@@ -149,6 +152,21 @@ public class MusicService extends Service {
             }
         }
     };
+    private final Runnable headsetClickRunnable = new Runnable() {
+        @Override
+        public void run() {
+            int clicks = headsetClickCount;
+            headsetClickCount = 0;
+            if (clicks == 1) {
+                togglePlay();
+            } else if (clicks == 2) {
+                nextSong();
+            } else if (clicks >= 3) {
+                prevSong();
+            }
+        }
+    };
+
     private final Runnable sleepTimerRunnable = new Runnable() {
         @Override
         public void run() {
@@ -261,6 +279,40 @@ public class MusicService extends Service {
                 
         mediaSession = new MediaSessionCompat(this, "MusicService");
         mediaSession.setCallback(new MediaSessionCompat.Callback() {
+            @Override
+            public boolean onMediaButtonEvent(Intent mediaButtonEvent) {
+                if (mediaButtonEvent != null) {
+                    KeyEvent event = mediaButtonEvent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+                    if (event != null && event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                        int keyCode = event.getKeyCode();
+                        if (keyCode == KeyEvent.KEYCODE_HEADSETHOOK
+                                || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
+                            headsetClickCount++;
+                            stateHandler.removeCallbacks(headsetClickRunnable);
+                            if (headsetClickCount >= 3) {
+                                stateHandler.post(headsetClickRunnable);
+                            } else {
+                                stateHandler.postDelayed(headsetClickRunnable, 340L);
+                            }
+                            return true;
+                        } else if (keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) {
+                            int dur = getDuration();
+                            if (dur > 0) {
+                                seekTo(Math.min(dur, getCurrentPosition() + 10_000));
+                            }
+                            return true;
+                        } else if (keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
+                            int dur = getDuration();
+                            if (dur > 0) {
+                                seekTo(Math.max(0, getCurrentPosition() - 10_000));
+                            }
+                            return true;
+                        }
+                    }
+                }
+                return super.onMediaButtonEvent(mediaButtonEvent);
+            }
+
             @Override
             public void onPlay() {
                 if (mediaPlayer == null && !mySongs.isEmpty()) {
@@ -553,6 +605,17 @@ public class MusicService extends Service {
         mp.setOnCompletionListener(completedMp -> {
             if (token != playToken || completedMp != mediaPlayer) return;
             stopPeriodicStateSave();
+            if (stopAfterCurrentTrack) {
+                stopAfterCurrentTrack = false;
+                try {
+                    completedMp.seekTo(0);
+                } catch (Exception ignored) {}
+                updateMediaSession();
+                showNotification(R.drawable.ic_play);
+                broadcastUIUpdate();
+                saveCurrentState(false);
+                return;
+            }
             if (gaplessNextPlayer != null && isGaplessNextPrepared && gaplessNextPath != null
                     && crossfadeSeconds == 0 && !skipSilence
                     && !(abLoopStartMs >= 0 && abLoopEndMs > abLoopStartMs)) {
@@ -593,7 +656,8 @@ public class MusicService extends Service {
             releaseGaplessNextPlayer();
             return;
         }
-        if (crossfadeSeconds > 0 || skipSilence || (abLoopStartMs >= 0 && abLoopEndMs > abLoopStartMs)) {
+        if (crossfadeSeconds > 0 || skipSilence || stopAfterCurrentTrack
+                || (abLoopStartMs >= 0 && abLoopEndMs > abLoopStartMs)) {
             releaseGaplessNextPlayer();
             return;
         }
@@ -1709,6 +1773,16 @@ public class MusicService extends Service {
         prepareNextGaplessPlayer();
     }
 
+    public void setStopAfterCurrentTrack(boolean enabled) {
+        stopAfterCurrentTrack = enabled;
+        prepareNextGaplessPlayer();
+        broadcastUIUpdate();
+    }
+
+    public boolean isStopAfterCurrentTrack() {
+        return stopAfterCurrentTrack;
+    }
+
     public void setSleepTimerMinutes(int minutes) {
         stateHandler.removeCallbacks(sleepTimerRunnable);
         if (minutes <= 0) {
@@ -1735,6 +1809,7 @@ public class MusicService extends Service {
             seekTo(abLoopStartMs);
             return;
         }
+        if (stopAfterCurrentTrack) return;
         if (repeatMode == REPEAT_ONE || crossfadeTriggered) return;
         if (repeatMode == REPEAT_OFF && queueManager.isEmpty() && isAtEndOfPlaylistCycle()) return;
         int duration = getDuration();

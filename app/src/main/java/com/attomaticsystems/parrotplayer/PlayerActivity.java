@@ -367,6 +367,19 @@ public class PlayerActivity extends AppCompatActivity {
         }
 
         btnPlay.setOnClickListener(v -> triggerPlayPause());
+        btnPlay.setOnLongClickListener(v -> {
+            if (isBound && musicService != null) {
+                boolean nextState = !musicService.isStopAfterCurrentTrack();
+                musicService.setStopAfterCurrentTrack(nextState);
+                lastTimerSpeedActive = !lastTimerSpeedActive;
+                updateTimerSpeedBadge();
+                Toast.makeText(this,
+                        nextState ? "Stop after current track enabled" : "Stop after current track cancelled",
+                        Toast.LENGTH_SHORT).show();
+                return true;
+            }
+            return false;
+        });
         btnNext.setOnClickListener(v -> triggerNext());
         btnPrev.setOnClickListener(v -> triggerPrev());
         btnNext.setOnLongClickListener(v -> {
@@ -883,10 +896,11 @@ public class PlayerActivity extends AppCompatActivity {
         long remainingMs = (isBound && musicService != null) ? musicService.getSleepTimerRemainingMs() : 0L;
         float speed = getActivePlaybackSpeed();
         int pitchSt = getActivePitchSemitones();
+        boolean stopAfter = (isBound && musicService != null) && musicService.isStopAfterCurrentTrack();
         boolean hasTimer = remainingMs > 0L;
         boolean hasCustomSpeed = Math.abs(speed - 1.0f) >= 0.04f;
         boolean hasCustomPitch = pitchSt != 0;
-        boolean active = hasTimer || hasCustomSpeed || hasCustomPitch;
+        boolean active = hasTimer || hasCustomSpeed || hasCustomPitch || stopAfter;
 
         StringBuilder label = new StringBuilder();
         if (hasCustomSpeed) {
@@ -899,6 +913,10 @@ public class PlayerActivity extends AppCompatActivity {
         if (hasTimer) {
             if (label.length() > 0) label.append(" • ");
             label.append(formatTime((int) Math.min(Integer.MAX_VALUE, remainingMs)));
+        }
+        if (stopAfter) {
+            if (label.length() > 0) label.append(" • ");
+            label.append("1× Stop");
         }
         String text = label.toString();
 
@@ -1131,6 +1149,39 @@ public class PlayerActivity extends AppCompatActivity {
             return chip;
         });
 
+        // Stop After Current Track toggle chip inside quick bottom sheet
+        boolean initialStopAfter = isBound && musicService != null && musicService.isStopAfterCurrentTrack();
+        final TextView[] stopAfterHolder = new TextView[1];
+        TextView btnStopAfterTrack = buildOptionChip(
+                initialStopAfter ? "Stop After Current Track: ON" : "Stop After Current Track: OFF",
+                initialStopAfter,
+                accent,
+                density,
+                v -> {
+                    if (isBound && musicService != null) {
+                        boolean nextState = !musicService.isStopAfterCurrentTrack();
+                        musicService.setStopAfterCurrentTrack(nextState);
+                        if (stopAfterHolder[0] != null) {
+                            stopAfterHolder[0].setText(nextState
+                                    ? "Stop After Current Track: ON"
+                                    : "Stop After Current Track: OFF");
+                            styleOptionChip(stopAfterHolder[0], nextState, accent, density);
+                        }
+                        lastTimerSpeedActive = !lastTimerSpeedActive;
+                        updateTimerSpeedBadge();
+                        Toast.makeText(this,
+                                nextState ? "Will stop after current track finishes" : "Continuous playback resumed",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                }
+        );
+        stopAfterHolder[0] = btnStopAfterTrack;
+        LinearLayout.LayoutParams saLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, (int) (40 * density));
+        saLp.topMargin = (int) (18 * density);
+        btnStopAfterTrack.setLayoutParams(saLp);
+        root.addView(btnStopAfterTrack);
+
         // Track Bookmarks button inside quick bottom sheet
         TextView btnOpenBookmarks = buildOptionChip(
                 "Track Bookmarks  •  Save or Jump to Timestamp",
@@ -1144,7 +1195,7 @@ public class PlayerActivity extends AppCompatActivity {
         );
         LinearLayout.LayoutParams bmLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, (int) (40 * density));
-        bmLp.topMargin = (int) (18 * density);
+        bmLp.topMargin = (int) (10 * density);
         btnOpenBookmarks.setLayoutParams(bmLp);
         root.addView(btnOpenBookmarks);
 

@@ -162,6 +162,17 @@ public class MainActivity extends AppCompatActivity implements AutoHideScrollHel
             intent.setAction(MusicService.ACTION_PLAY_PAUSE);
             startService(intent);
         });
+        miniPlayPause.setOnLongClickListener(v -> {
+            if (isBound && musicService != null) {
+                boolean nextState = !musicService.isStopAfterCurrentTrack();
+                musicService.setStopAfterCurrentTrack(nextState);
+                Toast.makeText(this,
+                        nextState ? "Stop after current track enabled" : "Stop after current track cancelled",
+                        Toast.LENGTH_SHORT).show();
+                return true;
+            }
+            return false;
+        });
 
         miniNext.setOnClickListener(v -> {
             Intent intent = new Intent(this, MusicService.class);
