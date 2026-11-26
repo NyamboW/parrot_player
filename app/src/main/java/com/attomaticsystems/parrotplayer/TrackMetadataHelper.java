@@ -122,6 +122,12 @@ public final class TrackMetadataHelper {
         }
     }
 
+    public static void invalidateCache(String path) {
+        if (path != null && !path.isEmpty()) {
+            cache.remove(path);
+        }
+    }
+
     public static String formatDuration(long durationMs) {
         long totalSec = Math.max(0L, durationMs) / 1000L;
         long hours = totalSec / 3600L;
@@ -290,13 +296,26 @@ public final class TrackMetadataHelper {
             bitrateKbps = (int) ((fileSize * 8L) / durationMs);
         }
 
+        TrackTagEditorHelper.TagOverride override = TrackTagEditorHelper.getOverride(null, path);
+        if (override != null) {
+            if (override.title != null && !override.title.isEmpty()) {
+                title = override.title;
+            }
+            if (override.artist != null && !override.artist.isEmpty()) {
+                artist = override.artist;
+            }
+            if (override.album != null && !override.album.isEmpty()) {
+                album = override.album;
+            }
+        }
+
         return new TrackInfo(
                 path, title, artist, album, ext,
                 bitrateKbps, sampleRateHz, channels, durationMs, fileSize
         );
     }
 
-    public static void showTrackDetailsDialog(Context context, TrackInfo info) {
+    public static void showTrackDetailsDialog(final Context context, final TrackInfo info) {
         if (context == null || info == null) return;
         String channelLabel = (info.channels == 1) ? "Mono (1 ch)" : "Stereo (" + info.channels + " ch)";
         String durationStr = formatDuration(info.durationMs);
@@ -316,10 +335,10 @@ public final class TrackMetadataHelper {
                 context,
                 "Track Details",
                 details,
+                "Edit Tags & Lyrics",
                 "Close",
-                null,
                 false,
-                null,
+                () -> TrackTagEditorHelper.showTagEditorDialog(context, info.filePath),
                 null,
                 null
         );

@@ -17,6 +17,7 @@ public class ApplicationClass extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        TrackTagEditorHelper.init(this);
         createNotificationChannels();
     }
 

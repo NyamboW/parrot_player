@@ -24,17 +24,19 @@ public class HomeFragment extends Fragment {
     public static final int TAB_ARTISTS = 0;
     public static final int TAB_TRACKS = 1;
     public static final int TAB_ALBUMS = 2;
-    public static final int TAB_PLAYLISTS = 3;
-    public static final int TAB_FAVORITES = 4;
-    public static final int TAB_MOST_PLAYED = 5;
-    public static final int TAB_RECENTLY_PLAYED = 6;
-    public static final int TAB_RECENTLY_ADDED = 7;
-    public static final int TAB_FOLDERS = 8;
+    public static final int TAB_GENRES = 3;
+    public static final int TAB_PLAYLISTS = 4;
+    public static final int TAB_FAVORITES = 5;
+    public static final int TAB_MOST_PLAYED = 6;
+    public static final int TAB_RECENTLY_PLAYED = 7;
+    public static final int TAB_RECENTLY_ADDED = 8;
+    public static final int TAB_FOLDERS = 9;
 
     private final String[] tabTitles = new String[]{
             "Artists",
             "Tracks",
             "Albums",
+            "Genres",
             "Playlists",
             "Favorites",
             "Most Played",
@@ -153,6 +155,8 @@ public class HomeFragment extends Fragment {
                     return new Music_Fragment();
                 case TAB_ALBUMS:
                     return new AlbumsFragment();
+                case TAB_GENRES:
+                    return new GenresFragment();
                 case TAB_PLAYLISTS:
                     return new PlaylistsFragment();
                 case TAB_FAVORITES:

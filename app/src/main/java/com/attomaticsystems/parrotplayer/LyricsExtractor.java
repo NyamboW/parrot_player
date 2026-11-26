@@ -125,8 +125,22 @@ public final class LyricsExtractor {
         });
     }
 
+    public static void invalidateCache(String songPath) {
+        if (songPath != null && !songPath.isEmpty()) {
+            cache.remove(songPath);
+        }
+    }
+
     public static LyricsData extractLyrics(String songPath) {
         try {
+            TrackTagEditorHelper.TagOverride override = TrackTagEditorHelper.getOverride(null, songPath);
+            if (override != null && override.lyrics != null && !override.lyrics.trim().isEmpty()) {
+                LyricsData customParsed = parseRawLyricsText(override.lyrics);
+                if (customParsed.hasLyrics()) {
+                    return customParsed;
+                }
+            }
+
             File audioFile = new File(songPath);
             if (!audioFile.exists()) return LyricsData.EMPTY;
 

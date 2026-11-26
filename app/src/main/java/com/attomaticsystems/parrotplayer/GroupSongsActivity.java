@@ -428,7 +428,12 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
             String selection = MediaStore.Audio.Media.IS_MUSIC + "!=0";
             String[] selectionArgs = null;
 
-            if ("artist".equals(type)) {
+            if ("genre".equals(type)) {
+                long genreId = getIntent().getLongExtra("genre_id", -1L);
+                if (genreId >= 0) {
+                    uri = MediaStore.Audio.Genres.Members.getContentUri("external", genreId);
+                }
+            } else if ("artist".equals(type)) {
                 selection += " AND " + MediaStore.Audio.Media.ARTIST + "=?";
                 selectionArgs = new String[]{name};
             } else if ("album".equals(type)) {
@@ -872,6 +877,47 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
                 String path = songList.get(i);
                 img.setTag(path);
                 NowPlayingBarsView.bindRow(v, path, txt);
+                TrackMetadataHelper.bindDuration(v.findViewById(R.id.txtSongDuration), path);
+
+                // Inline quick Up/Down reorder buttons for custom playlists
+                android.widget.LinearLayout endCluster = v.findViewById(R.id.endControlsCluster);
+                if (endCluster != null && "playlist".equals(groupType) && !isMultiSelectMode && currentQuery.trim().isEmpty()) {
+                    float density = getResources().getDisplayMetrics().density;
+                    int btnSize = (int) (28 * density);
+
+                    TextView btnUp = new TextView(GroupSongsActivity.this);
+                    btnUp.setText("▲");
+                    btnUp.setTextSize(11f);
+                    btnUp.setGravity(android.view.Gravity.CENTER);
+                    btnUp.setTextColor(i > 0 ? android.graphics.Color.parseColor("#C8D0DC") : android.graphics.Color.parseColor("#3E4554"));
+                    btnUp.setLayoutParams(new LinearLayout.LayoutParams(btnSize, btnSize));
+                    btnUp.setEnabled(i > 0);
+                    btnUp.setOnClickListener(vUp -> {
+                        if (i > 0) {
+                            PlaylistManager pm = new PlaylistManager(GroupSongsActivity.this);
+                            pm.moveSongInPlaylist(groupName, i, i - 1);
+                            loadGroupSongs(groupType, groupName);
+                        }
+                    });
+
+                    TextView btnDown = new TextView(GroupSongsActivity.this);
+                    btnDown.setText("▼");
+                    btnDown.setTextSize(11f);
+                    btnDown.setGravity(android.view.Gravity.CENTER);
+                    btnDown.setTextColor(i < songList.size() - 1 ? android.graphics.Color.parseColor("#C8D0DC") : android.graphics.Color.parseColor("#3E4554"));
+                    btnDown.setLayoutParams(new LinearLayout.LayoutParams(btnSize, btnSize));
+                    btnDown.setEnabled(i < songList.size() - 1);
+                    btnDown.setOnClickListener(vDown -> {
+                        if (i < songList.size() - 1) {
+                            PlaylistManager pm = new PlaylistManager(GroupSongsActivity.this);
+                            pm.moveSongInPlaylist(groupName, i, i + 1);
+                            loadGroupSongs(groupType, groupName);
+                        }
+                    });
+
+                    endCluster.addView(btnUp, 0);
+                    endCluster.addView(btnDown, 1);
+                }
 
                 if (btnMore != null) {
                     btnMore.setOnClickListener(view1 -> {
@@ -970,6 +1016,17 @@ public class GroupSongsActivity extends AppCompatActivity implements AutoHideScr
             }
         };
         listView.setAdapter(songsAdapter);
+        SongRowSwipeHelper.attach(listView, this, new SongRowSwipeHelper.SongPathProvider() {
+            @Override
+            public String getSongPathAt(int position) {
+                return (position >= 0 && position < songList.size()) ? songList.get(position) : null;
+            }
+
+            @Override
+            public boolean isSwipeAllowed() {
+                return !isMultiSelectMode;
+            }
+        }, null);
         AutoHideScrollHelper.attach(listView, this, null);
 
         listView.setOnItemClickListener((parent, view, position, id) ->

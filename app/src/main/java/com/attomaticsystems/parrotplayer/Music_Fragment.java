@@ -568,6 +568,17 @@ public class Music_Fragment extends Fragment {
             }
         };
         listView.setAdapter(songsAdapter);
+        SongRowSwipeHelper.attach(listView, requireContext(), new SongRowSwipeHelper.SongPathProvider() {
+            @Override
+            public String getSongPathAt(int position) {
+                return (position >= 0 && position < filteredSongList.size()) ? filteredSongList.get(position) : null;
+            }
+
+            @Override
+            public boolean isSwipeAllowed() {
+                return !isMultiSelectMode;
+            }
+        }, null);
 
         AutoHideScrollHelper.attach(listView, getActivity(), new AbsListView.OnScrollListener() {
             @Override

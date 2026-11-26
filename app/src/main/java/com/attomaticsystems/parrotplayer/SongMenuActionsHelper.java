@@ -35,6 +35,9 @@ public final class SongMenuActionsHelper {
             TrackMetadataHelper.loadTrackInfoAsync(songPath, info ->
                     TrackMetadataHelper.showTrackDetailsDialog(context, info));
             return true;
+        } else if (itemId == R.id.action_edit_tags) {
+            TrackTagEditorHelper.showTagEditorDialog(context, songPath);
+            return true;
         } else if (itemId == R.id.action_share_song) {
             shareSong(context, songPath);
             return true;

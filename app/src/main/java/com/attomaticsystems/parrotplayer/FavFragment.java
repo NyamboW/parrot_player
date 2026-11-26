@@ -541,6 +541,17 @@ public class FavFragment extends Fragment {
         };
 
         favListView.setAdapter(adapter);
+        SongRowSwipeHelper.attach(favListView, requireContext(), new SongRowSwipeHelper.SongPathProvider() {
+            @Override
+            public String getSongPathAt(int position) {
+                return (position >= 0 && position < filteredFavSongs.size()) ? filteredFavSongs.get(position) : null;
+            }
+
+            @Override
+            public boolean isSwipeAllowed() {
+                return !isMultiSelectMode;
+            }
+        }, this::loadFavourites);
 
         AutoHideScrollHelper.attach(favListView, getActivity(), new AbsListView.OnScrollListener() {
             @Override

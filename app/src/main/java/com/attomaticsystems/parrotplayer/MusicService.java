@@ -1321,6 +1321,11 @@ public class MusicService extends Service {
     }
 
     private String getFileName(String path) {
+        if (path == null) return "";
+        TrackTagEditorHelper.TagOverride override = TrackTagEditorHelper.getOverride(this, path);
+        if (override != null && override.title != null && !override.title.isEmpty()) {
+            return override.title;
+        }
         int index = path.lastIndexOf("/");
         String name = (index != -1) ? path.substring(index + 1) : path;
         return name.replaceAll("(?i)\\.(mp3|wav|m4a|flac|ogg|aac)$", "");

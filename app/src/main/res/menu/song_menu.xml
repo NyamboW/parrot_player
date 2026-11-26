@@ -22,6 +22,9 @@
         android:id="@+id/action_song_details"
         android:title="Song Info &amp; Details" />
     <item
+        android:id="@+id/action_edit_tags"
+        android:title="Edit Tags &amp; Lyrics" />
+    <item
         android:id="@+id/action_share_song"
         android:title="Share Song" />
     <item

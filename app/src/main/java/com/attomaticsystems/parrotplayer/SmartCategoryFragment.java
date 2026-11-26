@@ -327,6 +327,17 @@ public class SmartCategoryFragment extends Fragment {
         };
 
         listView.setAdapter(adapter);
+        SongRowSwipeHelper.attach(listView, requireContext(), new SongRowSwipeHelper.SongPathProvider() {
+            @Override
+            public String getSongPathAt(int position) {
+                return (position >= 0 && position < filteredSongs.size()) ? filteredSongs.get(position) : null;
+            }
+
+            @Override
+            public boolean isSwipeAllowed() {
+                return !isMultiSelectMode;
+            }
+        }, null);
 
         AutoHideScrollHelper.attach(listView, getActivity(), new AbsListView.OnScrollListener() {
             @Override
