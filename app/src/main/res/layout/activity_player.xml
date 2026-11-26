@@ -148,6 +148,26 @@
                 android:scaleType="centerCrop"
                 android:src="@drawable/ic_music" />
 
+            <!-- Double-Tap / Long-Press Seek Feedback Pill -->
+            <TextView
+                android:id="@+id/txtSeekRippleOverlay"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:background="@drawable/card_surface_bg"
+                android:elevation="6dp"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:paddingStart="18dp"
+                android:paddingTop="10dp"
+                android:paddingEnd="18dp"
+                android:paddingBottom="10dp"
+                android:text="⏩ +10s"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
             <!-- Live Synced Lyric Banner on Album Art (shown automatically when song has lyrics) -->
             <LinearLayout
                 android:id="@+id/liveLyricBanner"

@@ -7,7 +7,10 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.media.MediaExtractor;
+import android.media.MediaFormat;
 import android.util.AttributeSet;
+import android.util.LruCache;
 import android.view.MotionEvent;
 import android.view.animation.DecelerateInterpolator;
 
@@ -15,6 +18,11 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.AppCompatSeekBar;
 import androidx.core.graphics.ColorUtils;
+
+import java.io.File;
+import java.nio.ByteBuffer;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Modern AIMP / Poweramp / SoundCloud style Audio Waveform SeekBar.
@@ -27,6 +35,8 @@ public class WaveformSeekBar extends AppCompatSeekBar {
     private static final int BAR_COUNT = 58;
     private static final int COLOR_UNPLAYED = Color.parseColor("#2A3140");
     private static final int COLOR_AB_UNPLAYED = Color.parseColor("#3B4559");
+    private static final LruCache<String, float[]> REAL_WAVEFORM_CACHE = new LruCache<>(120);
+    private static final ExecutorService WAVEFORM_EXECUTOR = Executors.newSingleThreadExecutor();
 
     private final float[] barAmplitudes = new float[BAR_COUNT];
     private final Paint barPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -77,14 +87,128 @@ public class WaveformSeekBar extends AppCompatSeekBar {
     }
 
     /**
-     * Generates a deterministic, natural musical waveform profile for the given song path.
+     * Loads a cached or background-extracted real audio amplitude waveform for the given song path,
+     * displaying an instant deterministic waveform fallback while extraction completes.
      */
     public void setSongKey(@Nullable String songKey) {
-        String safeKey = (songKey != null && !songKey.isEmpty()) ? songKey : "default_parrot_waveform";
+        final String safeKey = (songKey != null && !songKey.isEmpty()) ? songKey : "default_parrot_waveform";
         if (safeKey.equals(currentSongKey)) return;
         currentSongKey = safeKey;
+
+        float[] cached = REAL_WAVEFORM_CACHE.get(safeKey);
+        if (cached != null && cached.length == BAR_COUNT) {
+            System.arraycopy(cached, 0, barAmplitudes, 0, BAR_COUNT);
+            invalidate();
+            return;
+        }
+
         generateWaveformForKey(safeKey);
         invalidate();
+
+        if (!"default_parrot_waveform".equals(safeKey)) {
+            extractRealWaveformAsync(safeKey);
+        }
+    }
+
+    private void extractRealWaveformAsync(final String filePath) {
+        WAVEFORM_EXECUTOR.execute(() -> {
+            float[] extracted = sampleAudioFileAmplitudes(filePath);
+            if (extracted != null && extracted.length == BAR_COUNT) {
+                REAL_WAVEFORM_CACHE.put(filePath, extracted);
+                post(() -> {
+                    if (filePath.equals(currentSongKey)) {
+                        System.arraycopy(extracted, 0, barAmplitudes, 0, BAR_COUNT);
+                        invalidate();
+                    }
+                });
+            }
+        });
+    }
+
+    @Nullable
+    private static float[] sampleAudioFileAmplitudes(String filePath) {
+        File file = new File(filePath);
+        if (!file.exists() || !file.canRead()) return null;
+
+        MediaExtractor extractor = new MediaExtractor();
+        try {
+            extractor.setDataSource(filePath);
+            int trackCount = extractor.getTrackCount();
+            int audioTrack = -1;
+            long durationUs = 0L;
+
+            for (int i = 0; i < trackCount; i++) {
+                MediaFormat format = extractor.getTrackFormat(i);
+                String mime = format.getString(MediaFormat.KEY_MIME);
+                if (mime != null && mime.startsWith("audio/")) {
+                    audioTrack = i;
+                    if (format.containsKey(MediaFormat.KEY_DURATION)) {
+                        durationUs = format.getLong(MediaFormat.KEY_DURATION);
+                    }
+                    break;
+                }
+            }
+            if (audioTrack < 0 || durationUs <= 2_000_000L) {
+                return null;
+            }
+
+            extractor.selectTrack(audioTrack);
+            ByteBuffer buffer = ByteBuffer.allocate(32 * 1024);
+            float[] rawScores = new float[BAR_COUNT];
+            float minScore = Float.MAX_VALUE;
+            float maxScore = 0f;
+
+            for (int i = 0; i < BAR_COUNT; i++) {
+                long targetUs = (durationUs * i) / BAR_COUNT;
+                extractor.seekTo(targetUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC);
+
+                long energySum = 0L;
+                int packetsRead = 0;
+                while (packetsRead < 5) {
+                    buffer.clear();
+                    int sampleSize = extractor.readSampleData(buffer, 0);
+                    if (sampleSize <= 0) break;
+                    int step = Math.max(1, sampleSize / 24);
+                    int byteEnergy = 0;
+                    for (int b = 0; b < sampleSize; b += step) {
+                        byteEnergy += Math.abs((int) buffer.get(b));
+                    }
+                    energySum += sampleSize + (byteEnergy * 2L);
+                    packetsRead++;
+                    if (!extractor.advance()) break;
+                }
+                float score = packetsRead > 0 ? (energySum / (float) packetsRead) : 0f;
+                rawScores[i] = score;
+                if (score > 0f && score < minScore) minScore = score;
+                if (score > maxScore) maxScore = score;
+            }
+
+            if (maxScore <= minScore || maxScore <= 0f) {
+                return null;
+            }
+
+            float[] normalized = new float[BAR_COUNT];
+            float span = Math.max(1f, maxScore - minScore * 0.75f);
+            for (int i = 0; i < BAR_COUNT; i++) {
+                float norm = (rawScores[i] - minScore * 0.75f) / span;
+                normalized[i] = Math.max(0.20f, Math.min(1.0f, 0.20f + 0.80f * norm));
+            }
+
+            float[] smoothed = new float[BAR_COUNT];
+            for (int i = 0; i < BAR_COUNT; i++) {
+                float prev = normalized[Math.max(0, i - 1)];
+                float curr = normalized[i];
+                float next = normalized[Math.min(BAR_COUNT - 1, i + 1)];
+                smoothed[i] = Math.max(0.20f, Math.min(1.0f, curr * 0.64f + (prev + next) * 0.18f));
+            }
+            return smoothed;
+        } catch (Exception ignored) {
+            return null;
+        } finally {
+            try {
+                extractor.release();
+            } catch (Exception ignored) {}
+        }
     }
 
     public void setAccentColor(int color) {

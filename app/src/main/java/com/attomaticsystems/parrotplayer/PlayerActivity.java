@@ -41,8 +41,10 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
+import androidx.core.graphics.ColorUtils;
 import androidx.core.widget.ImageViewCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
@@ -78,6 +80,7 @@ public class PlayerActivity extends AppCompatActivity {
     private LinearLayout liveLyricBanner, lyricsOverlayContainer, lyricsLinesContainer;
     private ImageView imgLiveLyricIcon;
     private TextView txtLiveLyricLine, txtLiveLyricExpand, txtLyricsBadge, btnCloseLyricsOverlay;
+    private TextView txtSeekRippleOverlay;
     private ScrollView lyricsScrollView;
     private final ArrayList<TextView> lyricLineViews = new ArrayList<>();
     private LyricsExtractor.LyricsData currentLyricsData = LyricsExtractor.LyricsData.EMPTY;
@@ -253,6 +256,7 @@ public class PlayerActivity extends AppCompatActivity {
         btnCloseLyricsOverlay = findViewById(R.id.btnCloseLyricsOverlay);
         lyricsScrollView = findViewById(R.id.lyricsScrollView);
         lyricsLinesContainer = findViewById(R.id.lyricsLinesContainer);
+        txtSeekRippleOverlay = findViewById(R.id.txtSeekRippleOverlay);
 
         txtSong.setSelected(true);
         applyAccentTheme();
@@ -350,6 +354,10 @@ public class PlayerActivity extends AppCompatActivity {
         }
         if (txtAbLoopPill != null) {
             txtAbLoopPill.setOnClickListener(v -> cycleAbLoopState());
+            txtAbLoopPill.setOnLongClickListener(v -> {
+                openBookmarksModal();
+                return true;
+            });
         }
         if (btnTimerSpeed != null) {
             btnTimerSpeed.setOnClickListener(v -> {
@@ -361,6 +369,14 @@ public class PlayerActivity extends AppCompatActivity {
         btnPlay.setOnClickListener(v -> triggerPlayPause());
         btnNext.setOnClickListener(v -> triggerNext());
         btnPrev.setOnClickListener(v -> triggerPrev());
+        btnNext.setOnLongClickListener(v -> {
+            seekByDeltaMs(10_000);
+            return true;
+        });
+        btnPrev.setOnLongClickListener(v -> {
+            seekByDeltaMs(-10_000);
+            return true;
+        });
 
         btnShuffle.setOnClickListener(v -> {
             isShuffle = !isShuffle;
@@ -580,6 +596,14 @@ public class PlayerActivity extends AppCompatActivity {
             }
 
             @Override
+            public boolean onDoubleTap(MotionEvent e) {
+                if (imgViewCard == null) return false;
+                boolean isRightSide = e.getX() >= (imgViewCard.getWidth() * 0.5f);
+                seekByDeltaMs(isRightSide ? 10_000 : -10_000);
+                return true;
+            }
+
+            @Override
             public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
                 if (e1 == null || e2 == null)
                     return false;
@@ -729,6 +753,7 @@ public class PlayerActivity extends AppCompatActivity {
             String[] choices = new String[]{
                     "Go to Artist: " + currentTrackInfo.artist,
                     "Go to Album: " + currentTrackInfo.album,
+                    "Track Bookmarks",
                     "Track Technical Info"
             };
             ParrotModalHelper.showSingleChoiceDialog(
@@ -741,6 +766,8 @@ public class PlayerActivity extends AppCompatActivity {
                             openGroupSongs("artist", currentTrackInfo.artist);
                         } else if (which == 1) {
                             openGroupSongs("album", currentTrackInfo.album);
+                        } else if (which == 2) {
+                            openBookmarksModal();
                         } else {
                             TrackMetadataHelper.showTrackDetailsDialog(this, currentTrackInfo);
                         }
@@ -1104,6 +1131,23 @@ public class PlayerActivity extends AppCompatActivity {
             return chip;
         });
 
+        // Track Bookmarks button inside quick bottom sheet
+        TextView btnOpenBookmarks = buildOptionChip(
+                "Track Bookmarks  •  Save or Jump to Timestamp",
+                false,
+                accent,
+                density,
+                v -> {
+                    sheet.dismiss();
+                    openBookmarksModal();
+                }
+        );
+        LinearLayout.LayoutParams bmLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, (int) (40 * density));
+        bmLp.topMargin = (int) (18 * density);
+        btnOpenBookmarks.setLayoutParams(bmLp);
+        root.addView(btnOpenBookmarks);
+
         refreshSheetStatus.run();
 
         final Runnable sheetTicker = new Runnable() {
@@ -1219,6 +1263,7 @@ public class PlayerActivity extends AppCompatActivity {
     private void loadAlbumArt(String path, boolean animateFade) {
         if (path == null || path.isEmpty()) {
             imgView.setImageResource(R.drawable.ic_music);
+            applyAmbientBackgroundFromArt(null);
             return;
         }
 
@@ -1231,6 +1276,7 @@ public class PlayerActivity extends AppCompatActivity {
 
         if (loader.hasNoArt(path)) {
             imgView.setImageResource(R.drawable.ic_music);
+            applyAmbientBackgroundFromArt(null);
             return;
         }
 
@@ -1247,12 +1293,14 @@ public class PlayerActivity extends AppCompatActivity {
                     imgView.animate().cancel();
                     imgView.setAlpha(1f);
                     imgView.setImageResource(R.drawable.ic_music);
+                    applyAmbientBackgroundFromArt(null);
                 }
             }
         });
     }
 
     private void setAlbumArtBitmap(Bitmap bitmap, boolean animateFade) {
+        applyAmbientBackgroundFromArt(bitmap);
         if (animateFade) {
             imgView.animate().cancel();
             imgView.setAlpha(0.55f);
@@ -1262,6 +1310,124 @@ public class PlayerActivity extends AppCompatActivity {
             imgView.setAlpha(1f);
             imgView.setImageBitmap(bitmap);
         }
+    }
+
+    private void applyAmbientBackgroundFromArt(@Nullable Bitmap bitmap) {
+        if (playerRootLayout == null) return;
+        int baseDark = Color.parseColor("#0B0B0F");
+        if (bitmap == null || bitmap.isRecycled() || bitmap.getWidth() <= 0 || bitmap.getHeight() <= 0) {
+            playerRootLayout.setBackgroundColor(baseDark);
+            return;
+        }
+        int dominant = extractDominantAmbientColor(bitmap, baseDark);
+        int topColor = ColorUtils.blendARGB(baseDark, dominant, 0.42f);
+        int midColor = ColorUtils.blendARGB(baseDark, dominant, 0.16f);
+        GradientDrawable ambient = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{topColor, midColor, baseDark}
+        );
+        playerRootLayout.setBackground(ambient);
+    }
+
+    private int extractDominantAmbientColor(Bitmap bitmap, int fallback) {
+        try {
+            int w = bitmap.getWidth();
+            int h = bitmap.getHeight();
+            int stepX = Math.max(1, w / 8);
+            int stepY = Math.max(1, h / 8);
+            long rSum = 0, gSum = 0, bSum = 0, weightSum = 0;
+            float[] hsl = new float[3];
+
+            for (int y = stepY / 2; y < h; y += stepY) {
+                for (int x = stepX / 2; x < w; x += stepX) {
+                    int pixel = bitmap.getPixel(x, y);
+                    int r = Color.red(pixel);
+                    int g = Color.green(pixel);
+                    int b = Color.blue(pixel);
+                    ColorUtils.RGBToHSL(r, g, b, hsl);
+                    // Prefer moderately saturated, non-black/non-white pixels
+                    if (hsl[2] > 0.10f && hsl[2] < 0.88f) {
+                        int weight = 1 + Math.round(hsl[1] * 4f);
+                        rSum += (long) r * weight;
+                        gSum += (long) g * weight;
+                        bSum += (long) b * weight;
+                        weightSum += weight;
+                    }
+                }
+            }
+            if (weightSum <= 0) return fallback;
+            int avgR = (int) (rSum / weightSum);
+            int avgG = (int) (gSum / weightSum);
+            int avgB = (int) (bSum / weightSum);
+            ColorUtils.RGBToHSL(avgR, avgG, avgB, hsl);
+            hsl[1] = Math.min(0.60f, Math.max(0.22f, hsl[1]));
+            hsl[2] = Math.min(0.32f, Math.max(0.18f, hsl[2]));
+            return ColorUtils.HSLToColor(hsl);
+        } catch (Exception ignored) {
+            return fallback;
+        }
+    }
+
+    private void seekByDeltaMs(int deltaMs) {
+        if (!isBound || musicService == null) return;
+        int duration = musicService.getDuration();
+        if (duration <= 0) return;
+        int current = musicService.getCurrentPosition();
+        int target = Math.max(0, Math.min(duration, current + deltaMs));
+        musicService.seekTo(target);
+        if (seekBar != null) {
+            seekBar.setProgress(target);
+        }
+        if (txtStart != null) {
+            txtStart.setText(formatTime(target));
+        }
+        syncLyricsToPosition(target, duration);
+        showSeekRippleFeedback(deltaMs, target);
+    }
+
+    private void showSeekRippleFeedback(int deltaMs, int targetMs) {
+        if (txtSeekRippleOverlay == null) return;
+        int sec = Math.abs(deltaMs) / 1000;
+        String label = (deltaMs >= 0 ? "⏩  +" : "⏪  -") + sec + "s  •  " + formatTime(targetMs);
+        txtSeekRippleOverlay.setText(label);
+        txtSeekRippleOverlay.animate().cancel();
+        txtSeekRippleOverlay.setVisibility(View.VISIBLE);
+        txtSeekRippleOverlay.setAlpha(0f);
+        txtSeekRippleOverlay.setScaleX(0.88f);
+        txtSeekRippleOverlay.setScaleY(0.88f);
+        txtSeekRippleOverlay.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(130)
+                .withEndAction(() -> txtSeekRippleOverlay.animate()
+                        .alpha(0f)
+                        .setStartDelay(520)
+                        .setDuration(200)
+                        .withEndAction(() -> txtSeekRippleOverlay.setVisibility(View.GONE))
+                        .start())
+                .start();
+    }
+
+    private void openBookmarksModal() {
+        if (currentSongPath == null || currentSongPath.isEmpty()) return;
+        int currentPos = (isBound && musicService != null)
+                ? musicService.getCurrentPosition()
+                : (seekBar != null ? seekBar.getProgress() : 0);
+        BookmarkManager.showBookmarksDialog(this, currentSongPath, currentPos, positionMs -> {
+            if (isBound && musicService != null) {
+                musicService.seekTo(positionMs);
+            }
+            if (seekBar != null) {
+                seekBar.setProgress(positionMs);
+            }
+            if (txtStart != null) {
+                txtStart.setText(formatTime(positionMs));
+            }
+            int dur = (isBound && musicService != null) ? musicService.getDuration() : (seekBar != null ? seekBar.getMax() : 0);
+            syncLyricsToPosition(positionMs, dur);
+            Toast.makeText(this, "Jumped to " + BookmarkManager.formatTimestamp(positionMs), Toast.LENGTH_SHORT).show();
+        });
     }
 
     private void sendActionToService(String action) {

@@ -498,8 +498,13 @@ public class MusicService extends Service {
 
                 int duration = preparedMp.getDuration();
                 int targetSeek = initialSeekMs;
-                if (targetSeek == 0 && skipSilence && duration > 15000) {
-                    targetSeek = 350;
+                if (targetSeek == 0) {
+                    int longTrackResume = BookmarkManager.getLongTrackResumePosition(MusicService.this, songPath, duration);
+                    if (longTrackResume > 0) {
+                        targetSeek = longTrackResume;
+                    } else if (skipSilence && duration > 15000) {
+                        targetSeek = 350;
+                    }
                 }
                 if (targetSeek > 0 && duration > 0 && targetSeek < duration) {
                     preparedMp.seekTo(targetSeek);
@@ -1601,11 +1606,14 @@ public class MusicService extends Service {
         if (stateManager == null || mySongs == null || mySongs.isEmpty()) return;
         String currentPath = getCurrentSongPath();
         if (currentPath == null) return;
+        int curPos = getCurrentPosition();
+        int curDur = getDuration();
+        BookmarkManager.saveLongTrackPosition(this, currentPath, curPos, curDur);
         stateManager.savePlaybackState(
                 position,
                 currentPath,
-                getCurrentPosition(),
-                getDuration(),
+                curPos,
+                curDur,
                 isShuffle,
                 repeatMode,
                 synchronous
