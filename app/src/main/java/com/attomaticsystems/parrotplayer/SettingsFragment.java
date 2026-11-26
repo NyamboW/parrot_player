@@ -33,6 +33,7 @@ public class SettingsFragment extends Fragment {
     public static final String PREFS_NAME = "parrot_settings";
     public static final String KEY_MUSIC_FOLDERS = "music_folders";
     public static final String KEY_PLAYBACK_SPEED = "playback_speed";
+    public static final String KEY_PLAYBACK_PITCH_SEMITONES = "playback_pitch_semitones";
     public static final String KEY_CROSSFADE_SECONDS = "crossfade_seconds";
     public static final String KEY_SKIP_SILENCE = "skip_silence";
     public static final String KEY_PAUSE_ON_UNPLUG = "pause_on_unplug";

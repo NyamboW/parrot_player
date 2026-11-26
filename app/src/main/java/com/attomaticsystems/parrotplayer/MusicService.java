@@ -26,6 +26,7 @@ import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.BassBoost;
+import android.media.audiofx.LoudnessEnhancer;
 import android.media.audiofx.PresetReverb;
 import android.content.SharedPreferences;
 import android.content.Context;
@@ -101,6 +102,10 @@ public class MusicService extends Service {
     private int restoredDuration = 0;
 
     private float playbackSpeed = 1.0f;
+    private int pitchSemitones = 0;
+    private int stereoBalance = 0; // -100 (Full Left) .. 0 (Center) .. +100 (Full Right)
+    private float preampGainScalar = 1.0f;
+    private float activeVolumeEnvelope = 1.0f;
     private int crossfadeSeconds = 0;
     private boolean skipSilence = false;
     private long sleepTimerEndElapsedMs = 0L;
@@ -155,16 +160,12 @@ public class MusicService extends Service {
                     if (mediaPlayer.isPlaying()) {
                         togglePlay();
                     }
-                    try {
-                        mediaPlayer.setVolume(1.0f, 1.0f);
-                    } catch (Exception ignored) {}
+                    setPlayerVolumeEnvelope(1.0f);
                 }
             } else {
                 if (remaining <= 3000L && mediaPlayer != null && isPrepared && mediaPlayer.isPlaying()) {
                     float vol = Math.max(0.08f, remaining / 3000f);
-                    try {
-                        mediaPlayer.setVolume(vol, vol);
-                    } catch (Exception ignored) {}
+                    setPlayerVolumeEnvelope(vol);
                 }
                 stateHandler.postDelayed(this, 500L);
             }
@@ -174,6 +175,7 @@ public class MusicService extends Service {
     private Equalizer mEqualizer;
     private BassBoost mBassBoost;
     private PresetReverb mPresetReverb;
+    private LoudnessEnhancer mLoudnessEnhancer;
 
     private MediaSessionCompat mediaSession;
     
@@ -200,7 +202,7 @@ public class MusicService extends Service {
                         boolean shouldResume = pausedByAudioFocus;
                         pausedByAudioFocus = false;
                         if (shouldResume && !mediaPlayer.isPlaying()) {
-                            mediaPlayer.setVolume(1.0f, 1.0f);
+                            setPlayerVolumeEnvelope(1.0f);
                             mediaPlayer.start();
                             applyPlaybackSpeed();
                             startPeriodicStateSave();
@@ -208,9 +210,7 @@ public class MusicService extends Service {
                             showNotification(R.drawable.ic_pause);
                             broadcastUIUpdate();
                         } else {
-                            try {
-                                mediaPlayer.setVolume(1.0f, 1.0f);
-                            } catch (Exception ignored) {}
+                            setPlayerVolumeEnvelope(1.0f);
                         }
                         break;
                     case AudioManager.AUDIOFOCUS_LOSS:
@@ -241,7 +241,7 @@ public class MusicService extends Service {
                                     .getBoolean(SettingsFragment.KEY_DUCK_ON_NOTIFICATION, true);
                             if (duckOnNotification) {
                                 pausedByAudioFocus = false;
-                                mediaPlayer.setVolume(0.2f, 0.2f);
+                                setPlayerVolumeEnvelope(0.2f);
                             } else {
                                 pausedByAudioFocus = true;
                                 mediaPlayer.pause();
@@ -885,7 +885,7 @@ public class MusicService extends Service {
         } else {
             int result = AudioManagerCompat.requestAudioFocus(audioManager, audioFocusRequest);
             if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-                mediaPlayer.setVolume(1.0f, 1.0f);
+                setPlayerVolumeEnvelope(1.0f);
                 mediaPlayer.start();
                 applyPlaybackSpeed();
                 startPeriodicStateSave();
@@ -1626,6 +1626,7 @@ public class MusicService extends Service {
     private void loadPlaybackPreferences() {
         SharedPreferences prefs = getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE);
         playbackSpeed = Math.max(0.5f, Math.min(2.0f, prefs.getFloat(SettingsFragment.KEY_PLAYBACK_SPEED, 1.0f)));
+        pitchSemitones = Math.max(-12, Math.min(12, prefs.getInt(SettingsFragment.KEY_PLAYBACK_PITCH_SEMITONES, 0)));
         crossfadeSeconds = Math.max(0, Math.min(12, prefs.getInt(SettingsFragment.KEY_CROSSFADE_SECONDS, 0)));
         skipSilence = prefs.getBoolean(SettingsFragment.KEY_SKIP_SILENCE, false);
     }
@@ -1641,6 +1642,17 @@ public class MusicService extends Service {
         return playbackSpeed;
     }
 
+    public void setPitchSemitones(int semitones) {
+        pitchSemitones = Math.max(-12, Math.min(12, semitones));
+        if (isPlaying()) {
+            applyPlaybackSpeed();
+        }
+    }
+
+    public int getPitchSemitones() {
+        return pitchSemitones;
+    }
+
     private void applyPlaybackSpeed() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && mediaPlayer != null && isPrepared) {
             try {
@@ -1650,11 +1662,28 @@ public class MusicService extends Service {
                         params = new PlaybackParams();
                     }
                     params.setSpeed(playbackSpeed);
+                    float pitchFactor = (float) Math.pow(2.0, pitchSemitones / 12.0);
+                    params.setPitch(Math.max(0.5f, Math.min(2.0f, pitchFactor)));
                     mediaPlayer.setPlaybackParams(params);
                 }
             } catch (Exception ignored) {
             }
         }
+    }
+
+    private void setPlayerVolumeEnvelope(float envelope) {
+        activeVolumeEnvelope = Math.max(0f, Math.min(1f, envelope));
+        applyCurrentPlayerVolume();
+    }
+
+    private void applyCurrentPlayerVolume() {
+        if (mediaPlayer == null || !isPrepared) return;
+        float base = Math.max(0f, Math.min(1f, activeVolumeEnvelope * preampGainScalar));
+        float leftScale = (stereoBalance > 0) ? Math.max(0f, (100 - stereoBalance) / 100f) : 1.0f;
+        float rightScale = (stereoBalance < 0) ? Math.max(0f, (100 + stereoBalance) / 100f) : 1.0f;
+        try {
+            mediaPlayer.setVolume(base * leftScale, base * rightScale);
+        } catch (Exception ignored) {}
     }
 
     public void setCrossfadeSeconds(int seconds) {
@@ -1672,9 +1701,7 @@ public class MusicService extends Service {
         if (minutes <= 0) {
             sleepTimerEndElapsedMs = 0L;
             if (mediaPlayer != null && isPrepared) {
-                try {
-                    mediaPlayer.setVolume(1.0f, 1.0f);
-                } catch (Exception ignored) {}
+                setPlayerVolumeEnvelope(1.0f);
             }
             return;
         }
@@ -1755,9 +1782,7 @@ public class MusicService extends Service {
             stateHandler.postDelayed(() -> {
                 if (token != playToken || mp != mediaPlayer || !isPrepared) return;
                 float vol = Math.min(1f, step / (float) steps);
-                try {
-                    mp.setVolume(vol, vol);
-                } catch (Exception ignored) {}
+                setPlayerVolumeEnvelope(vol);
             }, stepDelay * i);
         }
     }
@@ -1789,9 +1814,11 @@ public class MusicService extends Service {
                     if (pauseOnUnplug && isPlaying()) {
                         togglePlay();
                     }
+                    loadEqualizerSettings();
                 } else if (Intent.ACTION_HEADSET_PLUG.equals(intent.getAction())) {
                     if (isInitialStickyBroadcast()) return;
                     int state = intent.getIntExtra("state", -1);
+                    loadEqualizerSettings();
                     if (state == 1) {
                         maybeAutoResumeOnAudioConnect();
                     }
@@ -1813,12 +1840,19 @@ public class MusicService extends Service {
                 @Override
                 public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
                     if (!audioDeviceCallbackReady || addedDevices == null) return;
+                    loadEqualizerSettings();
                     for (AudioDeviceInfo device : addedDevices) {
                         if (isExternalOutputDevice(device)) {
                             maybeAutoResumeOnAudioConnect();
                             break;
                         }
                     }
+                }
+
+                @Override
+                public void onAudioDevicesRemoved(AudioDeviceInfo[] removedDevices) {
+                    if (!audioDeviceCallbackReady) return;
+                    loadEqualizerSettings();
                 }
             };
             audioManager.registerAudioDeviceCallback(audioDeviceCallback, stateHandler);
@@ -1960,18 +1994,66 @@ public class MusicService extends Service {
         }
     }
     
+    public boolean isExternalAudioOutputActive() {
+        if (audioManager == null) return false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+                if (devices != null) {
+                    for (AudioDeviceInfo device : devices) {
+                        if (isExternalOutputDevice(device)) {
+                            return true;
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        return audioManager.isWiredHeadsetOn() || audioManager.isBluetoothA2dpOn();
+    }
+
+    public static String resolveEqProfilePrefix(Context context, SharedPreferences eqPrefs) {
+        if (eqPrefs == null || !eqPrefs.getBoolean("autoOutputProfile", false)) {
+            return "";
+        }
+        MusicService active = getActiveInstance();
+        boolean external = false;
+        if (active != null) {
+            external = active.isExternalAudioOutputActive();
+        } else if (context != null) {
+            AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+            if (am != null) {
+                external = am.isWiredHeadsetOn() || am.isBluetoothA2dpOn();
+            }
+        }
+        return external ? "headset_" : "speaker_";
+    }
+
     private void setupEqualizer() {
         if (mediaPlayer == null) return;
         int sessionId = mediaPlayer.getAudioSessionId();
         
-        if (mEqualizer != null) mEqualizer.release();
-        if (mBassBoost != null) mBassBoost.release();
-        if (mPresetReverb != null) mPresetReverb.release();
+        if (mEqualizer != null) {
+            try { mEqualizer.release(); } catch (Exception ignored) {}
+        }
+        if (mBassBoost != null) {
+            try { mBassBoost.release(); } catch (Exception ignored) {}
+        }
+        if (mPresetReverb != null) {
+            try { mPresetReverb.release(); } catch (Exception ignored) {}
+        }
+        if (mLoudnessEnhancer != null) {
+            try { mLoudnessEnhancer.release(); } catch (Exception ignored) {}
+        }
         
         try {
             mEqualizer = new Equalizer(0, sessionId);
             mBassBoost = new BassBoost(0, sessionId);
             mPresetReverb = new PresetReverb(0, sessionId);
+            try {
+                mLoudnessEnhancer = new LoudnessEnhancer(sessionId);
+            } catch (Exception ignored) {
+                mLoudnessEnhancer = null;
+            }
             loadEqualizerSettings();
         } catch (Exception e) {
             e.printStackTrace();
@@ -1990,6 +2072,7 @@ public class MusicService extends Service {
         if (mEqualizer == null || mBassBoost == null || mPresetReverb == null) return;
         SharedPreferences prefs = getSharedPreferences("parrot_eq", Context.MODE_PRIVATE);
         boolean isEqEnabled = prefs.getBoolean("isEqualizerEnabled", true);
+        String pfx = resolveEqProfilePrefix(this, prefs);
         
         try {
             mEqualizer.setEnabled(isEqEnabled);
@@ -1997,12 +2080,12 @@ public class MusicService extends Service {
             mPresetReverb.setEnabled(isEqEnabled);
             
             if (isEqEnabled) {
-                int bassStrength = prefs.getInt("bassStrength", 0);
+                int bassStrength = prefs.getInt(pfx + "bassStrength", prefs.getInt("bassStrength", 0));
                 if (bassStrength >= 0 && mBassBoost.getStrengthSupported()) {
                     mBassBoost.setStrength((short) Math.min(1000, bassStrength));
                 }
                 
-                int reverbPreset = prefs.getInt("reverbPreset", 0);
+                int reverbPreset = prefs.getInt(pfx + "reverbPreset", prefs.getInt("reverbPreset", 0));
                 if (reverbPreset >= 0) {
                     mPresetReverb.setPreset((short) reverbPreset);
                 }
@@ -2011,14 +2094,68 @@ public class MusicService extends Service {
                 short minEq = (range != null && range.length >= 2) ? range[0] : -1500;
                 short maxEq = (range != null && range.length >= 2) ? range[1] : 1500;
 
+                int maxPositiveBandMb = 0;
                 short numBands = mEqualizer.getNumberOfBands();
                 for (short i = 0; i < numBands; i++) {
-                    int defaultLevel = prefs.getInt("band" + i, 0);
-                    int level = prefs.getInt("band_mb_" + i, defaultLevel);
+                    int fallbackLevel = prefs.getInt("band_mb_" + i, prefs.getInt("band" + i, 0));
+                    int level = prefs.getInt(pfx + "band_mb_" + i, fallbackLevel);
                     short clamped = (short) Math.max(minEq, Math.min(maxEq, level));
+                    if (clamped > maxPositiveBandMb) {
+                        maxPositiveBandMb = clamped;
+                    }
                     mEqualizer.setBandLevel(i, clamped);
                 }
+
+                // Preamp (-1200 to +1200 mB), Loudness Enhancer (0 to 1000 mB), Anti-Clipping Limiter & Stereo Balance
+                int preampMb = Math.max(-1200, Math.min(1200,
+                        prefs.getInt(pfx + "preampMb", prefs.getInt("preampMb", 0))));
+                int loudnessMb = Math.max(0, Math.min(1000,
+                        prefs.getInt(pfx + "loudnessMb", prefs.getInt("loudnessMb", 0))));
+                boolean limiterEnabled = prefs.getBoolean("limiterEnabled", true);
+                stereoBalance = Math.max(-100, Math.min(100,
+                        prefs.getInt(pfx + "stereoBalance", prefs.getInt("stereoBalance", 0))));
+
+                int limiterCutMb = 0;
+                if (limiterEnabled) {
+                    int bassBoostMb = (bassStrength * 450) / 1000;
+                    int peakBoostMb = maxPositiveBandMb + bassBoostMb + Math.max(0, preampMb);
+                    if (peakBoostMb > 250) {
+                        limiterCutMb = Math.min(900, (peakBoostMb - 250) / 2);
+                    }
+                }
+
+                int effectivePreampMb = preampMb - limiterCutMb;
+                if (effectivePreampMb < 0) {
+                    // Attenuate via software volume scalar (mB to linear amplitude: 10^(mB / 2000))
+                    preampGainScalar = (float) Math.pow(10.0, effectivePreampMb / 2000.0);
+                    preampGainScalar = Math.max(0.15f, Math.min(1.0f, preampGainScalar));
+                } else {
+                    preampGainScalar = 1.0f;
+                }
+
+                int targetLoudnessGainMb = Math.max(0, effectivePreampMb) + loudnessMb;
+                if (mLoudnessEnhancer != null) {
+                    try {
+                        if (targetLoudnessGainMb > 0) {
+                            mLoudnessEnhancer.setTargetGain(targetLoudnessGainMb);
+                            mLoudnessEnhancer.setEnabled(true);
+                        } else {
+                            mLoudnessEnhancer.setTargetGain(0);
+                            mLoudnessEnhancer.setEnabled(false);
+                        }
+                    } catch (Exception ignored) {}
+                }
+            } else {
+                preampGainScalar = 1.0f;
+                stereoBalance = 0;
+                if (mLoudnessEnhancer != null) {
+                    try {
+                        mLoudnessEnhancer.setTargetGain(0);
+                        mLoudnessEnhancer.setEnabled(false);
+                    } catch (Exception ignored) {}
+                }
             }
+            applyCurrentPlayerVolume();
         } catch (Exception e) {
             e.printStackTrace();
         }

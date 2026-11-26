@@ -17,6 +17,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -30,7 +31,7 @@ import java.util.ArrayList;
 import java.util.Locale;
 
 /**
- * Custom in-house Parrot Sound Effects & 5-Band Equalizer BottomSheet UI.
+ * Custom in-house Parrot Sound Effects, Preamp, Loudness, Stereo Balance & 5-Band Equalizer BottomSheet UI.
  */
 public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
 
@@ -38,6 +39,8 @@ public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
     private static final int BAND_COUNT = 5;
     private static final int DEFAULT_MIN_MB = -1500;
     private static final int DEFAULT_MAX_MB = 1500;
+    private static final int PREAMP_MIN_MB = -1200;
+    private static final int PREAMP_MAX_MB = 1200;
 
     private static final String[] DEFAULT_FREQ_LABELS = {
             "60 Hz", "230 Hz", "910 Hz", "3.6 kHz", "14 kHz"
@@ -68,9 +71,19 @@ public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
 
     private SharedPreferences eqPrefs;
     private SwitchCompat switchEqEnable;
+    private TextView btnEqOutputProfile;
+    private TextView btnEqLimiterToggle;
     private TextView txtEqPresetsHeader;
+    private TextView txtPreampValue;
+    private SeekBar seekPreamp;
+    private TextView txtLoudnessValue;
+    private SeekBar seekLoudness;
     private TextView txtBassValue;
     private SeekBar seekBassBoost;
+    private TextView txtBalanceValue;
+    private SeekBar seekStereoBalance;
+    private LinearLayout eqDspTogglesRow;
+    private LinearLayout eqPreampCard;
     private LinearLayout eqPresetsContainer;
     private LinearLayout eqBandsContainer;
     private LinearLayout reverbChipsContainer;
@@ -116,25 +129,27 @@ public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
 
         switchEqEnable = view.findViewById(R.id.switchEqEnable);
         TextView btnEqReset = view.findViewById(R.id.btnEqReset);
+        btnEqOutputProfile = view.findViewById(R.id.btnEqOutputProfile);
+        btnEqLimiterToggle = view.findViewById(R.id.btnEqLimiterToggle);
+        eqDspTogglesRow = view.findViewById(R.id.eqDspTogglesRow);
+        eqPreampCard = view.findViewById(R.id.eqPreampCard);
         txtEqPresetsHeader = view.findViewById(R.id.txtEqPresetsHeader);
+        txtPreampValue = view.findViewById(R.id.txtPreampValue);
+        seekPreamp = view.findViewById(R.id.seekPreamp);
+        txtLoudnessValue = view.findViewById(R.id.txtLoudnessValue);
+        seekLoudness = view.findViewById(R.id.seekLoudness);
         txtBassValue = view.findViewById(R.id.txtBassValue);
         seekBassBoost = view.findViewById(R.id.seekBassBoost);
+        txtBalanceValue = view.findViewById(R.id.txtBalanceValue);
+        seekStereoBalance = view.findViewById(R.id.seekStereoBalance);
         eqPresetsContainer = view.findViewById(R.id.eqPresetsContainer);
         eqBandsContainer = view.findViewById(R.id.eqBandsContainer);
         reverbChipsContainer = view.findViewById(R.id.reverbChipsContainer);
 
         readHardwareRangeIfAvailable();
-
-        boolean enabled = eqPrefs.getBoolean("isEqualizerEnabled", true);
-        selectedPresetIndex = eqPrefs.getInt("presetPos", 1);
-        if (selectedPresetIndex < 0 || selectedPresetIndex >= PRESET_NAMES.length) {
-            selectedPresetIndex = 1;
-        }
-        int savedBass = Math.max(0, Math.min(1000, eqPrefs.getInt("bassStrength", 0)));
-        selectedReverbPreset = Math.max(0, Math.min(REVERB_NAMES.length - 1, eqPrefs.getInt("reverbPreset", 0)));
-
         styleAccentControls(accent);
 
+        boolean enabled = eqPrefs.getBoolean("isEqualizerEnabled", true);
         switchEqEnable.setChecked(enabled);
         switchEqEnable.setOnCheckedChangeListener((buttonView, isChecked) -> {
             eqPrefs.edit().putBoolean("isEqualizerEnabled", isChecked).apply();
@@ -144,13 +159,143 @@ public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
 
         btnEqReset.setOnClickListener(v -> resetAllToDefault(accent));
 
+        setupOutputProfileAndLimiterButtons(accent);
         buildPresetChips(accent);
         buildBandRows(accent);
-        setupBassSlider(savedBass, accent);
+        setupPreampAndLoudnessSliders(accent);
+        setupBassAndBalanceSliders(accent);
         buildReverbChips(accent);
+        loadCurrentProfileIntoUi(accent);
         updateControlsEnabledState(enabled);
 
         return view;
+    }
+
+    private String getProfilePrefix() {
+        return MusicService.resolveEqProfilePrefix(getContext(), eqPrefs);
+    }
+
+    private void setupOutputProfileAndLimiterButtons(final int accent) {
+        if (btnEqOutputProfile != null) {
+            btnEqOutputProfile.setOnClickListener(v -> {
+                boolean currentAuto = eqPrefs.getBoolean("autoOutputProfile", false);
+                boolean nextAuto = !currentAuto;
+                eqPrefs.edit().putBoolean("autoOutputProfile", nextAuto).apply();
+                loadCurrentProfileIntoUi(accent);
+                notifyServiceReload();
+                String activeRoute = "headset_".equals(getProfilePrefix()) ? "Headset / BT" : "Speaker";
+                Toast.makeText(getContext(),
+                        nextAuto ? ("Auto Output EQ enabled (" + activeRoute + ")") : "Switched to Global EQ profile",
+                        Toast.LENGTH_SHORT).show();
+            });
+        }
+        if (btnEqLimiterToggle != null) {
+            btnEqLimiterToggle.setOnClickListener(v -> {
+                boolean currentLimiter = eqPrefs.getBoolean("limiterEnabled", true);
+                boolean nextLimiter = !currentLimiter;
+                eqPrefs.edit().putBoolean("limiterEnabled", nextLimiter).apply();
+                updateDspToggleChipStyles(accent);
+                notifyServiceReload();
+            });
+        }
+        updateDspToggleChipStyles(accent);
+    }
+
+    private void updateDspToggleChipStyles(int accent) {
+        if (!isAdded()) return;
+        float density = getResources().getDisplayMetrics().density;
+        boolean autoProfile = eqPrefs.getBoolean("autoOutputProfile", false);
+        boolean limiterOn = eqPrefs.getBoolean("limiterEnabled", true);
+
+        if (btnEqOutputProfile != null) {
+            String pfx = getProfilePrefix();
+            String label = autoProfile
+                    ? ("Auto: " + ("headset_".equals(pfx) ? "Headset / BT" : "Speaker"))
+                    : "Profile: Global";
+            btnEqOutputProfile.setText(label);
+            btnEqOutputProfile.setTextColor(autoProfile ? accent : Color.parseColor("#D5DCE6"));
+            btnEqOutputProfile.setBackground(AccentColorHelper.createRoundedRect(
+                    autoProfile ? AccentColorHelper.withAlpha(accent, 0x24) : Color.parseColor("#161A22"),
+                    autoProfile ? AccentColorHelper.withAlpha(accent, 0x66) : Color.parseColor("#242A36"),
+                    (int) (1 * density),
+                    12f * density
+            ));
+        }
+
+        if (btnEqLimiterToggle != null) {
+            btnEqLimiterToggle.setText(limiterOn ? "Anti-Clip Limiter: ON" : "Anti-Clip Limiter: OFF");
+            btnEqLimiterToggle.setTextColor(limiterOn ? accent : Color.parseColor("#9AA3B2"));
+            btnEqLimiterToggle.setBackground(AccentColorHelper.createRoundedRect(
+                    limiterOn ? AccentColorHelper.withAlpha(accent, 0x24) : Color.parseColor("#161A22"),
+                    limiterOn ? AccentColorHelper.withAlpha(accent, 0x66) : Color.parseColor("#242A36"),
+                    (int) (1 * density),
+                    12f * density
+            ));
+        }
+    }
+
+    private void loadCurrentProfileIntoUi(int accent) {
+        isUpdatingSliders = true;
+        String pfx = getProfilePrefix();
+
+        selectedPresetIndex = eqPrefs.getInt(pfx + "presetPos", eqPrefs.getInt("presetPos", 1));
+        if (selectedPresetIndex < 0 || selectedPresetIndex >= PRESET_NAMES.length) {
+            selectedPresetIndex = 1;
+        }
+        int savedPreampMb = Math.max(PREAMP_MIN_MB, Math.min(PREAMP_MAX_MB,
+                eqPrefs.getInt(pfx + "preampMb", eqPrefs.getInt("preampMb", 0))));
+        int savedLoudnessMb = Math.max(0, Math.min(1000,
+                eqPrefs.getInt(pfx + "loudnessMb", eqPrefs.getInt("loudnessMb", 0))));
+        int savedBass = Math.max(0, Math.min(1000,
+                eqPrefs.getInt(pfx + "bassStrength", eqPrefs.getInt("bassStrength", 0))));
+        int savedBalance = Math.max(-100, Math.min(100,
+                eqPrefs.getInt(pfx + "stereoBalance", eqPrefs.getInt("stereoBalance", 0))));
+        selectedReverbPreset = Math.max(0, Math.min(REVERB_NAMES.length - 1,
+                eqPrefs.getInt(pfx + "reverbPreset", eqPrefs.getInt("reverbPreset", 0))));
+
+        if (seekPreamp != null) {
+            seekPreamp.setProgress(savedPreampMb - PREAMP_MIN_MB);
+        }
+        if (txtPreampValue != null) {
+            updateBandDbLabel(txtPreampValue, savedPreampMb, accent);
+        }
+
+        if (seekLoudness != null) {
+            seekLoudness.setProgress(savedLoudnessMb);
+        }
+        if (txtLoudnessValue != null) {
+            txtLoudnessValue.setText((savedLoudnessMb / 10) + "%");
+        }
+
+        if (seekBassBoost != null) {
+            seekBassBoost.setProgress(savedBass);
+        }
+        if (txtBassValue != null) {
+            txtBassValue.setText((savedBass / 10) + "%");
+        }
+
+        if (seekStereoBalance != null) {
+            seekStereoBalance.setProgress(savedBalance + 100);
+        }
+        if (txtBalanceValue != null) {
+            updateBalanceLabel(savedBalance, accent);
+        }
+
+        int range = maxLevelMb - minLevelMb;
+        for (int i = 0; i < BAND_COUNT; i++) {
+            int savedMb = getSavedBandLevelMb(i);
+            if (bandSeekBars[i] != null) {
+                bandSeekBars[i].setProgress(Math.max(0, Math.min(range, savedMb - minLevelMb)));
+            }
+            if (bandValueViews[i] != null) {
+                updateBandDbLabel(bandValueViews[i], savedMb, accent);
+            }
+        }
+
+        updateDspToggleChipStyles(accent);
+        updatePresetChipStyles(accent);
+        updateReverbChipStyles(accent);
+        isUpdatingSliders = false;
     }
 
     private void readHardwareRangeIfAvailable() {
@@ -173,12 +318,18 @@ public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
         if (txtEqPresetsHeader != null) {
             txtEqPresetsHeader.setTextColor(accent);
         }
+        if (txtLoudnessValue != null) {
+            txtLoudnessValue.setTextColor(accent);
+        }
         if (txtBassValue != null) {
             txtBassValue.setTextColor(accent);
         }
-        if (seekBassBoost != null) {
-            seekBassBoost.setProgressTintList(ColorStateList.valueOf(accent));
-            seekBassBoost.setThumbTintList(ColorStateList.valueOf(accent));
+        SeekBar[] globalSliders = new SeekBar[]{seekPreamp, seekLoudness, seekBassBoost, seekStereoBalance};
+        for (SeekBar sb : globalSliders) {
+            if (sb != null) {
+                sb.setProgressTintList(ColorStateList.valueOf(accent));
+                sb.setThumbTintList(ColorStateList.valueOf(accent));
+            }
         }
         if (switchEqEnable != null) {
             int[][] states = new int[][]{
@@ -189,6 +340,132 @@ public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
             int[] trackColors = new int[]{AccentColorHelper.withAlpha(accent, 0x66), Color.parseColor("#2A303C")};
             switchEqEnable.setThumbTintList(new ColorStateList(states, thumbColors));
             switchEqEnable.setTrackTintList(new ColorStateList(states, trackColors));
+        }
+    }
+
+    private void setupPreampAndLoudnessSliders(final int accent) {
+        if (seekPreamp != null) {
+            seekPreamp.setMax(PREAMP_MAX_MB - PREAMP_MIN_MB);
+            seekPreamp.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                    int preampMb = PREAMP_MIN_MB + progress;
+                    if (fromUser && Math.abs(preampMb) < 40) {
+                        preampMb = 0;
+                        seekBar.setProgress(-PREAMP_MIN_MB);
+                    }
+                    if (txtPreampValue != null) {
+                        updateBandDbLabel(txtPreampValue, preampMb, accent);
+                    }
+                    if (fromUser && !isUpdatingSliders) {
+                        String pfx = getProfilePrefix();
+                        eqPrefs.edit()
+                                .putInt(pfx + "preampMb", preampMb)
+                                .putInt("preampMb", preampMb)
+                                .apply();
+                        notifyServiceReload();
+                    }
+                }
+
+                @Override
+                public void onStartTrackingTouch(SeekBar seekBar) {}
+
+                @Override
+                public void onStopTrackingTouch(SeekBar seekBar) {}
+            });
+        }
+
+        if (seekLoudness != null) {
+            seekLoudness.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                    if (txtLoudnessValue != null) {
+                        txtLoudnessValue.setText((progress / 10) + "%");
+                    }
+                    if (fromUser && !isUpdatingSliders) {
+                        String pfx = getProfilePrefix();
+                        eqPrefs.edit()
+                                .putInt(pfx + "loudnessMb", progress)
+                                .putInt("loudnessMb", progress)
+                                .apply();
+                        notifyServiceReload();
+                    }
+                }
+
+                @Override
+                public void onStartTrackingTouch(SeekBar seekBar) {}
+
+                @Override
+                public void onStopTrackingTouch(SeekBar seekBar) {}
+            });
+        }
+    }
+
+    private void setupBassAndBalanceSliders(final int accent) {
+        if (seekBassBoost != null) {
+            seekBassBoost.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                    txtBassValue.setText((progress / 10) + "%");
+                    if (fromUser && !isUpdatingSliders) {
+                        String pfx = getProfilePrefix();
+                        eqPrefs.edit()
+                                .putInt(pfx + "bassStrength", progress)
+                                .putInt("bassStrength", progress)
+                                .apply();
+                        notifyServiceReload();
+                    }
+                }
+
+                @Override
+                public void onStartTrackingTouch(SeekBar seekBar) {}
+
+                @Override
+                public void onStopTrackingTouch(SeekBar seekBar) {}
+            });
+        }
+
+        if (seekStereoBalance != null) {
+            seekStereoBalance.setMax(200);
+            seekStereoBalance.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                    int balance = progress - 100;
+                    if (fromUser && Math.abs(balance) <= 4) {
+                        balance = 0;
+                        seekBar.setProgress(100);
+                    }
+                    updateBalanceLabel(balance, accent);
+                    if (fromUser && !isUpdatingSliders) {
+                        String pfx = getProfilePrefix();
+                        eqPrefs.edit()
+                                .putInt(pfx + "stereoBalance", balance)
+                                .putInt("stereoBalance", balance)
+                                .apply();
+                        notifyServiceReload();
+                    }
+                }
+
+                @Override
+                public void onStartTrackingTouch(SeekBar seekBar) {}
+
+                @Override
+                public void onStopTrackingTouch(SeekBar seekBar) {}
+            });
+        }
+    }
+
+    private void updateBalanceLabel(int balance, int accent) {
+        if (txtBalanceValue == null) return;
+        if (balance == 0) {
+            txtBalanceValue.setText("Center");
+            txtBalanceValue.setTextColor(Color.parseColor("#8A93A2"));
+        } else if (balance < 0) {
+            txtBalanceValue.setText("L " + Math.abs(balance) + "%");
+            txtBalanceValue.setTextColor(accent);
+        } else {
+            txtBalanceValue.setText("R " + balance + "%");
+            txtBalanceValue.setTextColor(accent);
         }
     }
 
@@ -216,7 +493,11 @@ public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
 
             chip.setOnClickListener(v -> {
                 selectedPresetIndex = presetIdx;
-                eqPrefs.edit().putInt("presetPos", selectedPresetIndex).apply();
+                String pfx = getProfilePrefix();
+                eqPrefs.edit()
+                        .putInt(pfx + "presetPos", selectedPresetIndex)
+                        .putInt("presetPos", selectedPresetIndex)
+                        .apply();
                 updatePresetChipStyles(accent);
                 if (presetIdx > 0) {
                     applyPresetBands(PRESET_GAINS_MB[presetIdx], accent);
@@ -310,7 +591,6 @@ public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
                 @Override
                 public void onProgressChanged(SeekBar sb, int prog, boolean fromUser) {
                     int levelMb = minLevelMb + prog;
-                    // Snap near 0 dB when dragging close to center
                     if (fromUser && Math.abs(levelMb) < 35) {
                         levelMb = 0;
                         sb.setProgress(-minLevelMb);
@@ -319,8 +599,11 @@ public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
                     if (fromUser && !isUpdatingSliders) {
                         selectedPresetIndex = 0; // Custom
                         updatePresetChipStyles(accent);
+                        String pfx = getProfilePrefix();
                         eqPrefs.edit()
+                                .putInt(pfx + "presetPos", 0)
                                 .putInt("presetPos", 0)
+                                .putInt(pfx + "band_mb_" + bandIdx, levelMb)
                                 .putInt("band_mb_" + bandIdx, levelMb)
                                 .putInt("band" + bandIdx, levelMb)
                                 .apply();
@@ -346,6 +629,11 @@ public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
     }
 
     private int getSavedBandLevelMb(int bandIndex) {
+        String pfx = getProfilePrefix();
+        if (eqPrefs.contains(pfx + "band_mb_" + bandIndex)) {
+            int val = eqPrefs.getInt(pfx + "band_mb_" + bandIndex, 0);
+            return Math.max(minLevelMb, Math.min(maxLevelMb, val));
+        }
         if (eqPrefs.contains("band_mb_" + bandIndex)) {
             int val = eqPrefs.getInt("band_mb_" + bandIndex, 0);
             return Math.max(minLevelMb, Math.min(maxLevelMb, val));
@@ -390,6 +678,7 @@ public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
     private void applyPresetBands(int[] gainsMb, int accent) {
         isUpdatingSliders = true;
         int range = maxLevelMb - minLevelMb;
+        String pfx = getProfilePrefix();
         SharedPreferences.Editor editor = eqPrefs.edit();
         for (int i = 0; i < BAND_COUNT; i++) {
             int clamped = Math.max(minLevelMb, Math.min(maxLevelMb, gainsMb[i]));
@@ -399,33 +688,13 @@ public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
             if (bandValueViews[i] != null) {
                 updateBandDbLabel(bandValueViews[i], clamped, accent);
             }
+            editor.putInt(pfx + "band_mb_" + i, clamped);
             editor.putInt("band_mb_" + i, clamped);
             editor.putInt("band" + i, clamped);
         }
         editor.apply();
         isUpdatingSliders = false;
         notifyServiceReload();
-    }
-
-    private void setupBassSlider(int savedBass, int accent) {
-        seekBassBoost.setProgress(savedBass);
-        txtBassValue.setText((savedBass / 10) + "%");
-        seekBassBoost.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                txtBassValue.setText((progress / 10) + "%");
-                if (fromUser) {
-                    eqPrefs.edit().putInt("bassStrength", progress).apply();
-                    notifyServiceReload();
-                }
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {}
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {}
-        });
     }
 
     private void buildReverbChips(int accent) {
@@ -452,7 +721,11 @@ public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
 
             chip.setOnClickListener(v -> {
                 selectedReverbPreset = reverbIdx;
-                eqPrefs.edit().putInt("reverbPreset", selectedReverbPreset).apply();
+                String pfx = getProfilePrefix();
+                eqPrefs.edit()
+                        .putInt(pfx + "reverbPreset", selectedReverbPreset)
+                        .putInt("reverbPreset", selectedReverbPreset)
+                        .apply();
                 updateReverbChipStyles(accent);
                 notifyServiceReload();
             });
@@ -483,25 +756,37 @@ public class ParrotEqualizerDialogFragment extends BottomSheetDialogFragment {
     private void resetAllToDefault(int accent) {
         selectedPresetIndex = 1; // Flat
         selectedReverbPreset = 0; // None
+        String pfx = getProfilePrefix();
         eqPrefs.edit()
                 .putBoolean("isEqualizerEnabled", true)
+                .putInt(pfx + "presetPos", 1)
                 .putInt("presetPos", 1)
+                .putInt(pfx + "preampMb", 0)
+                .putInt("preampMb", 0)
+                .putInt(pfx + "loudnessMb", 0)
+                .putInt("loudnessMb", 0)
+                .putInt(pfx + "bassStrength", 0)
                 .putInt("bassStrength", 0)
+                .putInt(pfx + "stereoBalance", 0)
+                .putInt("stereoBalance", 0)
+                .putInt(pfx + "reverbPreset", 0)
                 .putInt("reverbPreset", 0)
                 .apply();
         switchEqEnable.setChecked(true);
-        seekBassBoost.setProgress(0);
-        txtBassValue.setText("0%");
-        updatePresetChipStyles(accent);
-        updateReverbChipStyles(accent);
         applyPresetBands(PRESET_GAINS_MB[1], accent);
+        loadCurrentProfileIntoUi(accent);
     }
 
     private void updateControlsEnabledState(boolean enabled) {
         float alpha = enabled ? 1.0f : 0.45f;
+        if (eqDspTogglesRow != null) eqDspTogglesRow.setAlpha(alpha);
+        if (eqPreampCard != null) eqPreampCard.setAlpha(alpha);
         if (eqPresetsContainer != null) eqPresetsContainer.setAlpha(alpha);
         if (eqBandsContainer != null) eqBandsContainer.setAlpha(alpha);
+        if (seekPreamp != null) seekPreamp.setEnabled(enabled);
+        if (seekLoudness != null) seekLoudness.setEnabled(enabled);
         if (seekBassBoost != null) seekBassBoost.setEnabled(enabled);
+        if (seekStereoBalance != null) seekStereoBalance.setEnabled(enabled);
         for (SeekBar sb : bandSeekBars) {
             if (sb != null) sb.setEnabled(enabled);
         }

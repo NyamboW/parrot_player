@@ -838,17 +838,36 @@ public class PlayerActivity extends AppCompatActivity {
                 .getFloat(SettingsFragment.KEY_PLAYBACK_SPEED, 1.0f);
     }
 
+    private int getActivePitchSemitones() {
+        if (isBound && musicService != null) {
+            return musicService.getPitchSemitones();
+        }
+        return getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE)
+                .getInt(SettingsFragment.KEY_PLAYBACK_PITCH_SEMITONES, 0);
+    }
+
+    private String formatPitchChip(int semitones) {
+        if (semitones == 0) return "0 st";
+        return (semitones > 0 ? "+" : "") + semitones + " st";
+    }
+
     private void updateTimerSpeedBadge() {
         if (btnTimerSpeed == null) return;
         long remainingMs = (isBound && musicService != null) ? musicService.getSleepTimerRemainingMs() : 0L;
         float speed = getActivePlaybackSpeed();
+        int pitchSt = getActivePitchSemitones();
         boolean hasTimer = remainingMs > 0L;
         boolean hasCustomSpeed = Math.abs(speed - 1.0f) >= 0.04f;
-        boolean active = hasTimer || hasCustomSpeed;
+        boolean hasCustomPitch = pitchSt != 0;
+        boolean active = hasTimer || hasCustomSpeed || hasCustomPitch;
 
         StringBuilder label = new StringBuilder();
         if (hasCustomSpeed) {
             label.append(formatSpeedChip(speed));
+        }
+        if (hasCustomPitch) {
+            if (label.length() > 0) label.append(" • ");
+            label.append(formatPitchChip(pitchSt));
         }
         if (hasTimer) {
             if (label.length() > 0) label.append(" • ");
@@ -929,7 +948,7 @@ public class PlayerActivity extends AppCompatActivity {
 
         // Header
         TextView titleView = new TextView(this);
-        titleView.setText("Timer & Speed");
+        titleView.setText("Timer, Speed & Pitch");
         titleView.setTextColor(Color.parseColor("#F5F7FA"));
         titleView.setTextSize(18f);
         titleView.setTypeface(null, Typeface.BOLD);
@@ -960,15 +979,17 @@ public class PlayerActivity extends AppCompatActivity {
         Runnable refreshSheetStatus = () -> {
             long remMs = (isBound && musicService != null) ? musicService.getSleepTimerRemainingMs() : 0L;
             float spd = getActivePlaybackSpeed();
+            int pitchSt = getActivePitchSemitones();
+            String pitchSuffix = pitchSt != 0 ? (" • " + formatPitchChip(pitchSt) + " pitch") : "";
             if (remMs > 0L) {
                 timerHeader.setText("SLEEP TIMER  •  " + formatTime((int) Math.min(Integer.MAX_VALUE, remMs)) + " LEFT");
                 subtitleView.setText("Stops playback in " + formatTime((int) Math.min(Integer.MAX_VALUE, remMs))
-                        + " • " + formatSpeedChip(spd) + " speed");
+                        + " • " + formatSpeedChip(spd) + " speed" + pitchSuffix);
             } else {
                 timerHeader.setText("SLEEP TIMER");
-                subtitleView.setText(Math.abs(spd - 1.0f) >= 0.04f
-                        ? "Playing at " + formatSpeedChip(spd) + " speed"
-                        : "Auto-pause gently or adjust playback speed");
+                subtitleView.setText((Math.abs(spd - 1.0f) >= 0.04f || pitchSt != 0)
+                        ? ("Playing at " + formatSpeedChip(spd) + " speed" + pitchSuffix)
+                        : "Auto-pause gently or adjust playback speed & pitch");
             }
             if (timerChips[0] != null && remMs <= 0L) {
                 for (int k = 0; k < timerChips.length; k++) {
@@ -1039,6 +1060,47 @@ public class PlayerActivity extends AppCompatActivity {
                 refreshSheetStatus.run();
             });
             speedChips[index] = chip;
+            return chip;
+        });
+
+        // Audio Pitch (Semitones) section
+        TextView pitchHeader = new TextView(this);
+        int currentPitchSt = getActivePitchSemitones();
+        pitchHeader.setText("AUDIO PITCH  •  " + formatPitchChip(currentPitchSt));
+        pitchHeader.setTextColor(accent);
+        pitchHeader.setTextSize(11f);
+        pitchHeader.setLetterSpacing(0.08f);
+        pitchHeader.setTypeface(null, Typeface.BOLD);
+        LinearLayout.LayoutParams phParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        phParams.topMargin = (int) (20 * density);
+        pitchHeader.setLayoutParams(phParams);
+        root.addView(pitchHeader);
+
+        final int[] pitchOptions = new int[]{-6, -3, -1, 0, 1, 3, 6};
+        final TextView[] pitchChips = new TextView[pitchOptions.length];
+        addChipGrid(root, density, 4, pitchOptions.length, index -> {
+            final int targetPitch = pitchOptions[index];
+            boolean isSelected = (currentPitchSt == targetPitch);
+            TextView chip = buildOptionChip(formatPitchChip(targetPitch), isSelected, accent, density, v -> {
+                getSharedPreferences(SettingsFragment.PREFS_NAME, Context.MODE_PRIVATE)
+                        .edit()
+                        .putInt(SettingsFragment.KEY_PLAYBACK_PITCH_SEMITONES, targetPitch)
+                        .apply();
+                if (isBound && musicService != null) {
+                    musicService.setPitchSemitones(targetPitch);
+                }
+                pitchHeader.setText("AUDIO PITCH  •  " + formatPitchChip(targetPitch));
+                for (int k = 0; k < pitchChips.length; k++) {
+                    if (pitchChips[k] != null) {
+                        styleOptionChip(pitchChips[k], pitchOptions[k] == targetPitch, accent, density);
+                    }
+                }
+                lastTimerSpeedActive = !lastTimerSpeedActive;
+                updateTimerSpeedBadge();
+                refreshSheetStatus.run();
+            });
+            pitchChips[index] = chip;
             return chip;
         });
 
